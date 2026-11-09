@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy>=2
+psycopg[binary]
+pyjwt
+bcrypt
+pytest
+pdfplumber
+python-multipart
+openpyxl
