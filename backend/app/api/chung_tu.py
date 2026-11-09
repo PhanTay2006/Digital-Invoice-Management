@@ -149,6 +149,7 @@ class HDIn(BaseModel):
     vat: D = Field(ge=0)
     tien_coc_tru: D = D(0)
     file_pdf: Optional[str] = None
+    ma_cqt: Optional[str] = None
     dong: list[DongHD] = Field(min_length=1)
 
 

@@ -55,6 +55,9 @@ def gui_yeu_cau(tid: int, b: YeuCau, u=Depends(can_vai_tro("KE_TOAN_AP"))):
                 VALUES(:h,:t,:l,:u,:d) RETURNING id"""), {"h": tc[0], "t": tid, "l": ld, "u": u["id"], "d": b.ly_do}).scalar()
         except Exception as e:
             raise HTTPException(422, str(e.orig) if hasattr(e, "orig") else str(e))
+        c.execute(text("""INSERT INTO thong_bao(nguoi_nhan_id,hoa_don_id,loai,noi_dung)
+            SELECT id,:h,'YEU_CAU_DUYET','Có yêu cầu duyệt ngoại lệ cần xử lý' FROM nguoi_dung
+            WHERE vai_tro='QUAN_LY' AND hoat_dong"""), {"h": tc[0]})
     return {"id": yid}
 
 
