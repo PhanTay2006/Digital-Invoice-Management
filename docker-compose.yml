@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: doisoat_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: doisoat
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d doisoat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    container_name: doisoat_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@db:5432/doisoat
+      JWT_SECRET: doi-chuoi-bat-ky-dai-va-kho-doan
+      UPLOAD_DIR: /srv/uploads
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/srv/app
+      - ./backend/uploads:/srv/uploads
+
+volumes:
+  pgdata:
