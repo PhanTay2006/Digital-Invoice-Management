@@ -12,8 +12,8 @@ export default function MainLayout() {
           <Outlet />
         </main>
         <footer className="app-footer">
-          <span>© 2026 LedgerFlow</span>
-          <span>Digital Invoice Management</span>
+          <span>© 2026 Hệ thống Quản lý Hóa đơn Điện tử & Đối soát B2B Tự động</span>
+          <span>CSDL: PostgreSQL 16 (ACID & Audit Trail Trigger)</span>
         </footer>
       </div>
     </div>

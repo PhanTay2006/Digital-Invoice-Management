@@ -177,3 +177,297 @@ tbody tr:last-child td { border-bottom: 0; }
   .metric-value-row strong { font-size: 19px; }
   .app-footer { padding: 14px 15px; }
 }
+
+
+/* --- Màn hình Đăng nhập chuẩn bảo mật & Form Nghiệp vụ Tiếng Việt --- */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e1f3b 0%, #312e81 50%, #4338ca 100%);
+  padding: 24px;
+}
+.login-container {
+  width: 100%;
+  max-width: 1040px;
+  background: #fff;
+  border-radius: 18px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  box-shadow: 0 24px 60px rgba(15, 18, 45, 0.38);
+}
+.login-info-panel {
+  background: linear-gradient(155deg, #3730a3 0%, #4f46e5 100%);
+  color: #fff;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+}
+.login-info-panel h1 {
+  font: 800 24px/1.35 'Plus Jakarta Sans', sans-serif;
+  margin: 8px 0 14px;
+}
+.login-lead {
+  color: #e0e7ff;
+  font-size: 13px;
+  line-height: 1.65;
+  margin-bottom: 28px;
+}
+.security-badges {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sec-badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.sec-badge span { font-size: 18px; }
+.sec-badge div { display: flex; flex-direction: column; gap: 3px; }
+.sec-badge strong { font-size: 12px; color: #fff; }
+.sec-badge small { font-size: 11px; color: #c7d2fe; }
+
+.login-form-panel {
+  padding: 36px 38px;
+  display: flex;
+  flex-direction: column;
+}
+.login-header h2 {
+  font: 800 21px 'Plus Jakarta Sans', sans-serif;
+  margin: 0 0 6px;
+  color: #1e2238;
+}
+.login-header p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.login-form, .crud-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3b4058;
+}
+.form-group input, .form-group select, .line-item-row input {
+  height: 38px;
+  border: 1px solid #dcdfe8;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: #fff;
+}
+.form-group input:focus, .form-group select:focus, .line-item-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(87, 85, 217, 0.14);
+}
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-input-wrap input {
+  width: 100%;
+  padding-right: 54px;
+}
+.toggle-pw-btn {
+  position: absolute;
+  right: 8px;
+  border: 0;
+  background: #f0efff;
+  color: var(--primary);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.login-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #5b6178;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.login-submit-btn {
+  height: 42px;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.demo-accounts-box {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.demo-box-title {
+  font-size: 11px;
+  color: #4b5068;
+  margin-bottom: 10px;
+}
+.demo-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.demo-item {
+  text-align: left;
+  padding: 8px 11px;
+  border-radius: 8px;
+  border: 1px solid #e6e8f0;
+  background: #fafbfe;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  transition: 0.15s ease;
+}
+.demo-item:hover, .demo-item.selected {
+  border-color: var(--primary);
+  background: #f0efff;
+}
+.demo-item small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.alert-banner, .alert-error, .alert-success {
+  padding: 12px 15px;
+  border-radius: 9px;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+.alert-error {
+  background: #fff1f0;
+  border: 1px solid #ffccc7;
+  color: #cf1322;
+}
+.alert-success {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #389e0d;
+}
+.role-notice {
+  padding: 14px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 9px;
+  color: #ad6800;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.line-items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.line-item-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.remove-line-btn {
+  height: 36px;
+  width: 36px;
+  border-radius: 7px;
+  border: 1px solid #ffccc7;
+  background: #fff1f0;
+  color: #cf1322;
+}
+.total-preview {
+  padding: 11px 14px;
+  background: #f4f4ff;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #333758;
+  text-align: right;
+}
+.detail-box {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f9fafd;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.detail-box h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.grn-line-card {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fafbfe;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.grn-line-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.upload-pdf-box {
+  padding: 12px;
+  background: #f4f4ff;
+  border: 1px dashed #918ef4;
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+}
+.notif-count {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 10px;
+  margin-left: 3px;
+}
+.history-list {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (max-width: 860px) {
+  .login-container { grid-template-columns: 1fr; }
+  .login-info-panel { display: none; }
+}

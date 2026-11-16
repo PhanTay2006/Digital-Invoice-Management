@@ -10,7 +10,7 @@ from ..core.common import engine, can_vai_tro, phien, loi_db
 
 router = APIRouter()
 QT = Depends(can_vai_tro("QUAN_TRI"))
-VAI_TRO = "MUA_HANG|THU_KHO|KE_TOAN_AP|QUAN_LY|QUAN_TRI"
+VAI_TRO = "MUA_HANG|THU_KHO|KE_TOAN_AP|QUAN_LY|QUAN_TRI|TOAN_QUYEN"
 
 
 class NDIn(BaseModel):
@@ -18,6 +18,13 @@ class NDIn(BaseModel):
     mat_khau: str = Field(min_length=8)
     ho_ten: str
     vai_tro: str = Field(pattern=f"^({VAI_TRO})$")
+
+
+@router.get("/nguoi-dung")
+def ds_nguoi_dung(u=QT):
+    with engine.connect() as c:
+        rows = c.execute(text("SELECT id,ten_dang_nhap,ho_ten,vai_tro,hoat_dong,ngay_tao FROM nguoi_dung ORDER BY id")).mappings()
+        return [dict(r) for r in rows]
 
 
 @router.post("/nguoi-dung", status_code=201)

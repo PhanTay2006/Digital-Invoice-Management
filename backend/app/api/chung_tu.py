@@ -49,6 +49,16 @@ def tao_anh_xa(b: AnhXa, u=Depends(can_vai_tro("MUA_HANG", "KE_TOAN_AP"))):
         raise loi_db(e)
 
 
+@router.get("/anh-xa-sku")
+def ds_anh_xa(ncc_id: Optional[int] = None, u=Depends(nguoi_dung)):
+    with engine.connect() as c:
+        if ncc_id is not None:
+            rows = c.execute(text("SELECT ax.*, n.ten AS ten_ncc FROM anh_xa_sku ax JOIN nha_cung_cap n ON n.id=ax.nha_cung_cap_id WHERE ax.nha_cung_cap_id=:n ORDER BY ax.id DESC"), {"n": ncc_id}).mappings()
+        else:
+            rows = c.execute(text("SELECT ax.*, n.ten AS ten_ncc FROM anh_xa_sku ax JOIN nha_cung_cap n ON n.id=ax.nha_cung_cap_id ORDER BY ax.id DESC")).mappings()
+        return [dict(r) for r in rows]
+
+
 # ---------- PO ----------
 class DongPOIn(BaseModel):
     ma_sku: str
@@ -65,6 +75,18 @@ class POIn(BaseModel):
     dieu_khoan_tt: Optional[str] = None
     tien_coc: D = D(0)
     dong: list[DongPOIn] = Field(min_length=1)
+
+
+@router.get("/po")
+def ds_po(u=Depends(nguoi_dung)):
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT p.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+            FROM don_hang_po p
+            JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            ORDER BY p.ngay_dat DESC, p.id DESC
+        """)).mappings()
+        return [dict(r) for r in rows]
 
 
 @router.post("/po", status_code=201)
@@ -108,6 +130,19 @@ class KhoIn(BaseModel):
     ngay_nhap: str
     file_pdf: Optional[str] = None
     dong: list[DongKho] = Field(min_length=1)
+
+
+@router.get("/phieu-kho")
+def ds_phieu_kho(u=Depends(nguoi_dung)):
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT k.*, p.so_po, n.ten AS ten_ncc
+            FROM phieu_kho k
+            JOIN don_hang_po p ON p.id = k.po_id
+            JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            ORDER BY k.ngay_nhap DESC, k.id DESC
+        """)).mappings()
+        return [dict(r) for r in rows]
 
 
 @router.post("/phieu-kho", status_code=201)

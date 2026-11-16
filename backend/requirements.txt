@@ -8,3 +8,7 @@ pytest
 pdfplumber
 python-multipart
 openpyxl
+pillow
+numpy
+paddleocr
+paddlepaddle

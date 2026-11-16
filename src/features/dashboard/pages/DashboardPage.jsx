@@ -1,42 +1,64 @@
-const metrics = [
-  { label: 'Total invoices', value: '2,480', change: '+12.8%', note: 'vs. last month', icon: '▤', tone: 'blue' },
-  { label: 'Pending matching', value: '184', change: '+8.2%', note: 'vs. last month', icon: '⇄', tone: 'violet' },
-  { label: 'Matched this month', value: '1,926', change: '+18.4%', note: 'vs. last month', icon: '✓', tone: 'green' },
-  { label: 'Exceptions', value: '42', change: '-5.1%', note: 'vs. last month', icon: '⚑', tone: 'orange' },
-]
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { apiFetch } from '../../../services/api'
+import { useAuth } from '../../../contexts/AuthContext'
 
-const activities = [
-  { id: 'INV-2026-0842', supplier: 'Global Supplies Ltd.', date: 'Nov 08, 2026', amount: '$12,450.00', status: 'Matched', tone: 'success' },
-  { id: 'INV-2026-0841', supplier: 'TechSource Inc.', date: 'Nov 08, 2026', amount: '$8,200.00', status: 'Pending review', tone: 'warning' },
-  { id: 'INV-2026-0840', supplier: 'Office Hub Co.', date: 'Nov 07, 2026', amount: '$3,680.50', status: 'Processing', tone: 'info' },
-  { id: 'INV-2026-0839', supplier: 'Metro Logistics', date: 'Nov 07, 2026', amount: '$15,900.00', status: 'Mismatched', tone: 'danger' },
-  { id: 'INV-2026-0838', supplier: 'Bright Systems', date: 'Nov 06, 2026', amount: '$6,125.00', status: 'Matched', tone: 'success' },
-]
+const TRANG_THAI_MAP = {
+  CHUA_DOI_SOAT: { label: 'Chưa đối soát', tone: 'info' },
+  MATCHED: { label: 'Khớp (Matched)', tone: 'success' },
+  PARTIAL: { label: 'Chờ đủ kho (Partial)', tone: 'warning' },
+  MISMATCH: { label: 'Lệch (Mismatch)', tone: 'danger' },
+  RECONCILED: { label: 'Đã đối soát (Reconciled)', tone: 'success' },
+}
 
 export default function DashboardPage() {
+  const { user } = useAuth()
+  const [stats, setStats] = useState(null)
+  const [recentInvoices, setRecentInvoices] = useState([])
+  const [pos, setPos] = useState([])
+
+  useEffect(() => {
+    apiFetch('/hoa-don?limit=6').then(setRecentInvoices).catch(() => {})
+    apiFetch('/po').then(setPos).catch(() => {})
+    apiFetch('/dashboard').then(setStats).catch(() => {})
+  }, [])
+
+  const theoTt = stats?.theo_trang_thai || {}
+  const tongHd = Object.values(theoTt).reduce((a, b) => a + b, 0) || recentInvoices.length
+  const soMatched = (theoTt.MATCHED || 0) + (theoTt.RECONCILED || 0)
+  const soMismatch = theoTt.MISMATCH || 0
+  const soPartial = (theoTt.PARTIAL || 0) + (theoTt.CHUA_DOI_SOAT || 0)
+
+  const metrics = [
+    { label: 'Tổng số Hóa đơn B2B', value: String(tongHd), change: 'PostgreSQL', note: 'Từ bảng hoa_don', icon: '▤', tone: 'blue' },
+    { label: 'Chờ đối soát / Đủ kho', value: String(soPartial), change: 'Cần xử lý', note: 'Chưa đối soát & Partial', icon: '⇄', tone: 'violet' },
+    { label: 'Đã khớp / Reconciled', value: String(soMatched), change: `${stats?.ty_le_reconciled_pct ?? 0}%`, note: 'Tỷ lệ hoàn tất đối soát', icon: '✓', tone: 'green' },
+    { label: 'Hóa đơn Lệch (Mismatch)', value: String(soMismatch), change: `${stats?.tranh_chap_dang_mo ?? 0} tranh chấp`, note: `${stats?.yeu_cau_cho_duyet ?? 0} chờ duyệt ngoại lệ`, icon: '⚑', tone: 'orange' },
+  ]
+
   return (
     <section className="dashboard-page">
       <div className="page-heading dashboard-heading">
         <div>
-          <p className="eyebrow">OVERVIEW</p>
-          <h1>Good morning, Tay <span className="wave">✦</span></h1>
-          <p className="page-description">Here’s what’s happening with your invoice operations today.</p>
+          <p className="eyebrow">TỔNG QUAN VẬN HÀNH (F-08, F-14 / UC17, UC18)</p>
+          <h1>Xin chào, {user?.ho_ten || 'Người dùng'} <span className="wave">✦</span></h1>
+          <p className="page-description">
+            Bạn đang đăng nhập với vai trò <strong>{user?.ten_vai_tro}</strong> (Tài khoản: <code>{user?.ten_dang_nhap}</code>). Số liệu bên dưới được truy vấn trực tiếp từ PostgreSQL.
+          </p>
         </div>
         <div className="heading-actions">
-          <button className="button button-secondary" type="button">↓ Export report</button>
-          <button className="button button-primary" type="button"><span>＋</span> Upload invoice</button>
+          <Link className="button button-secondary" to="/reports" style={{ display: 'inline-flex', alignItems: 'center' }}>↓ Xuất báo cáo</Link>
+          <Link className="button button-primary" to="/invoices" style={{ display: 'inline-flex', alignItems: 'center' }}><span>＋</span> Nhập / Upload Hóa đơn</Link>
         </div>
       </div>
 
       <div className="date-banner">
         <div className="date-banner-icon">◷</div>
-        <div><strong>Monday, November 9, 2026</strong><span>Here is your daily operations snapshot.</span></div>
-        <span className="live-indicator"><i /> LIVE OVERVIEW</span>
-      </div>
-
-      <div className="section-title-row">
-        <div><h2>Performance overview</h2><p>Track your invoice workflow at a glance.</p></div>
-        <button className="period-select" type="button">Last 30 days <span>⌄</span></button>
+        <div>
+          <strong>Kết nối Cơ sở dữ liệu PostgreSQL (Database: doisoat)</strong>
+          <span>Tổng số Đơn đặt hàng (PO) hiện có: <b>{pos.length}</b> | Tổng số Hóa đơn: <b>{tongHd}</b></span>
+        </div>
+        <span className="live-indicator"><i /> ĐỒNG BỘ THỜI GIAN THỰC</span>
       </div>
 
       <div className="metrics-grid">
@@ -44,10 +66,12 @@ export default function DashboardPage() {
           <article className="metric-card" key={metric.label}>
             <div className="metric-top">
               <span className={`metric-icon ${metric.tone}`}>{metric.icon}</span>
-              <button className="more-button" type="button" aria-label={`More about ${metric.label}`}>···</button>
             </div>
             <p className="metric-label">{metric.label}</p>
-            <div className="metric-value-row"><strong>{metric.value}</strong><span className={`metric-change ${metric.tone}`}>{metric.change}</span></div>
+            <div className="metric-value-row">
+              <strong>{metric.value}</strong>
+              <span className={`metric-change ${metric.tone}`}>{metric.change}</span>
+            </div>
             <p className="metric-note">{metric.note}</p>
           </article>
         ))}
@@ -56,38 +80,66 @@ export default function DashboardPage() {
       <div className="dashboard-columns">
         <section className="panel activity-panel">
           <div className="panel-heading">
-            <div><h2>Recent invoices</h2><p>Latest documents received in your workspace.</p></div>
-            <a href="/invoices">View all <span>→</span></a>
+            <div>
+              <h2>Hóa đơn B2B gần nhất trong Database</h2>
+              <p>Dữ liệu thời gian thực từ bảng <code>hoa_don</code></p>
+            </div>
+            <Link to="/invoices">Xem tất cả <span>→</span></Link>
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>INVOICE</th><th>SUPPLIER</th><th>DATE</th><th>AMOUNT</th><th>STATUS</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>SỐ HÓA ĐƠN</th>
+                  <th>ĐƠN HÀNG (PO)</th>
+                  <th>NGÀY LẬP</th>
+                  <th>TỔNG THANH TOÁN (₫)</th>
+                  <th>TRẠNG THÁI</th>
+                </tr>
+              </thead>
               <tbody>
-                {activities.map((item) => (
-                  <tr key={item.id}>
-                    <td><strong className="invoice-id">{item.id}</strong></td>
-                    <td>{item.supplier}</td>
-                    <td className="muted-cell">{item.date}</td>
-                    <td className="amount-cell">{item.amount}</td>
-                    <td><span className={`status-pill ${item.tone}`}>{item.status}</span></td>
-                  </tr>
-                ))}
+                {recentInvoices.map((inv) => {
+                  const st = TRANG_THAI_MAP[inv.trang_thai] || { label: inv.trang_thai, tone: 'info' }
+                  return (
+                    <tr key={inv.id}>
+                      <td><strong className="invoice-id">{inv.so_hoa_don}</strong></td>
+                      <td>PO #{inv.po_id}</td>
+                      <td className="muted-cell">{inv.ngay_lap}</td>
+                      <td className="amount-cell">{Number(inv.tong_thanh_toan).toLocaleString('vi-VN')} ₫</td>
+                      <td>
+                        <span className={`status-pill ${st.tone}`}>
+                          {st.label} {inv.theo_ngoai_le ? '(Ngoại lệ)' : ''}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </section>
 
         <section className="panel matching-panel">
-          <div className="panel-heading"><div><h2>Matching health</h2><p>Current reconciliation status.</p></div><button className="more-button" type="button" aria-label="More options">···</button></div>
+          <div className="panel-heading">
+            <div>
+              <h2>Tình trạng Đối soát 3 Chiều</h2>
+              <p>Tỷ lệ khớp tự động & xử lý ngoại lệ</p>
+            </div>
+          </div>
           <div className="matching-score">
-            <div className="score-ring"><div><strong>92.4%</strong><span>Match rate</span></div></div>
+            <div className="score-ring">
+              <div>
+                <strong>{stats?.ty_le_reconciled_pct ?? 0}%</strong>
+                <span>Đã Reconciled</span>
+              </div>
+            </div>
           </div>
           <div className="match-legend">
-            <div><span className="legend-dot matched-dot" /><span>Matched</span><strong>1,926</strong></div>
-            <div><span className="legend-dot pending-dot" /><span>Pending review</span><strong>184</strong></div>
-            <div><span className="legend-dot exception-dot" /><span>Exceptions</span><strong>42</strong></div>
+            <div><span className="legend-dot matched-dot" /><span>Đã khớp / Reconciled</span><strong>{soMatched}</strong></div>
+            <div><span className="legend-dot pending-dot" /><span>Chưa đối soát / Partial</span><strong>{soPartial}</strong></div>
+            <div><span className="legend-dot exception-dot" /><span>Lệch (Mismatch)</span><strong>{soMismatch}</strong></div>
           </div>
-          <a className="panel-link" href="/matching">Open matching center <span>→</span></a>
+          <Link className="panel-link" to="/matching">Mở Trung tâm Đối soát 3 chiều <span>→</span></Link>
         </section>
       </div>
     </section>

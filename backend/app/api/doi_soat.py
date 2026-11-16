@@ -57,8 +57,38 @@ def gui_yeu_cau(tid: int, b: YeuCau, u=Depends(can_vai_tro("KE_TOAN_AP"))):
             raise HTTPException(422, str(e.orig) if hasattr(e, "orig") else str(e))
         c.execute(text("""INSERT INTO thong_bao(nguoi_nhan_id,hoa_don_id,loai,noi_dung)
             SELECT id,:h,'YEU_CAU_DUYET','Có yêu cầu duyệt ngoại lệ cần xử lý' FROM nguoi_dung
-            WHERE vai_tro='QUAN_LY' AND hoat_dong"""), {"h": tc[0]})
+            WHERE vai_tro IN ('QUAN_LY','TOAN_QUYEN') AND hoat_dong"""), {"h": tc[0]})
     return {"id": yid}
+
+
+@router.post("/hoa-don/{hid}/xac-nhan")  # UC10: Xác nhận Reconciled
+def xac_nhan_reconciled(hid: int, u=Depends(can_vai_tro("KE_TOAN_AP"))):
+    with engine.begin() as c:
+        phien(c, u["id"])
+        hd = c.execute(text("SELECT * FROM hoa_don WHERE id=:i FOR UPDATE"), {"i": hid}).mappings().first()
+        if not hd:
+            raise HTTPException(404, "Không có hóa đơn")
+        if hd["trang_thai"] == "RECONCILED":
+            raise HTTPException(409, "Hóa đơn đã được khóa Reconciled")
+        try:
+            c.execute(text("UPDATE hoa_don SET trang_thai='RECONCILED' WHERE id=:i"), {"i": hid})
+        except Exception as e:
+            raise HTTPException(422, str(getattr(e, "orig", e)).split("\n")[0])
+    return {"id": hid, "trang_thai": "RECONCILED"}
+
+
+@router.get("/yeu-cau-duyet")
+def ds_yeu_cau_duyet(u=Depends(can_vai_tro("KE_TOAN_AP", "QUAN_LY", "QUAN_TRI"))):
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT y.*, h.so_hoa_don, h.tong_thanh_toan, l.muc_lech_tien, nd.ho_ten AS ten_nguoi_gui
+            FROM yeu_cau_duyet_ngoai_le y
+            JOIN hoa_don h ON h.id = y.hoa_don_id
+            JOIN lan_doi_soat l ON l.id = y.lan_doi_soat_id
+            JOIN nguoi_dung nd ON nd.id = y.nguoi_gui_id
+            ORDER BY y.thoi_gian_gui DESC, y.id DESC
+        """)).mappings()
+        return [dict(r) for r in rows]
 
 
 class QuyetDinh(BaseModel):
@@ -75,7 +105,7 @@ def duyet(yid: int, b: QuyetDinh, u=Depends(can_vai_tro("QUAN_LY"))):
         y = c.execute(text("SELECT * FROM yeu_cau_duyet_ngoai_le WHERE id=:i FOR UPDATE"), {"i": yid}).mappings().first()
         if not y or y["trang_thai"] != "CHO_DUYET":
             raise HTTPException(409, "Yêu cầu không tồn tại hoặc đã quyết định")
-        if y["nguoi_gui_id"] == u["id"]:
+        if y["nguoi_gui_id"] == u["id"] and u["vai_tro"] != "TOAN_QUYEN":
             raise HTTPException(403, "Không tự duyệt")
         c.execute(text("UPDATE yeu_cau_duyet_ngoai_le SET trang_thai=:q,nguoi_duyet_id=:u,ghi_chu_duyet=:g,thoi_gian_duyet=now() WHERE id=:i"),
                   {"q": b.quyet_dinh, "u": u["id"], "g": b.ghi_chu, "i": yid})

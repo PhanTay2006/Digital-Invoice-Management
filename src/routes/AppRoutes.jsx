@@ -1,33 +1,48 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import MainLayout from '../layouts/MainLayout'
 import DashboardPage from '../features/dashboard/pages/DashboardPage'
-import ModulePlaceholderPage from '../components/common/ModulePlaceholderPage'
+import PurchaseOrdersPage from '../features/purchase-orders/pages/PurchaseOrdersPage'
+import GoodsReceiptsPage from '../features/goods-receipts/pages/GoodsReceiptsPage'
+import InvoicesPage from '../features/invoices/pages/InvoicesPage'
+import MatchingPage from '../features/matching/pages/MatchingPage'
+import ExceptionsPage from '../features/exceptions/pages/ExceptionsPage'
+import SuppliersPage from '../features/suppliers/pages/SuppliersPage'
+import ReportsPage from '../features/reports/pages/ReportsPage'
+import UsersAuditPage from '../features/users/pages/UsersAuditPage'
+import LoginPage from '../features/users/pages/LoginPage'
+import { useAuth } from '../contexts/AuthContext'
 
-const modules = [
-  { path: 'invoices', title: 'Invoices', description: 'Upload, review and manage supplier invoices.' },
-  { path: 'purchase-orders', title: 'Purchase Orders', description: 'Create and track purchase orders.' },
-  { path: 'goods-receipts', title: 'Goods Receipts', description: 'Record received goods and delivery details.' },
-  { path: 'matching', title: 'Three-Way Matching', description: 'Compare purchase orders, goods receipts and invoices.' },
-  { path: 'exceptions', title: 'Exceptions', description: 'Review and resolve mismatches that need attention.' },
-  { path: 'suppliers', title: 'Suppliers', description: 'Manage supplier profiles and related documents.' },
-  { path: 'reports', title: 'Reports & Analytics', description: 'Explore reconciliation performance and trends.' },
-  { path: 'users', title: 'Users & Access', description: 'Manage team members and access permissions.' },
-]
+function RequireAuth({ children }) {
+  const { user } = useAuth()
+  const location = useLocation()
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+  return children
+}
 
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route element={<MainLayout />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        element={
+          <RequireAuth>
+            <MainLayout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        {modules.map((module) => (
-          <Route
-            key={module.path}
-            path={module.path}
-            element={<ModulePlaceholderPage title={module.title} description={module.description} />}
-          />
-        ))}
-        <Route path="*" element={<ModulePlaceholderPage title="Page not found" description="The page you are looking for does not exist." />} />
+        <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
+        <Route path="goods-receipts" element={<GoodsReceiptsPage />} />
+        <Route path="invoices" element={<InvoicesPage />} />
+        <Route path="matching" element={<MatchingPage />} />
+        <Route path="exceptions" element={<ExceptionsPage />} />
+        <Route path="suppliers" element={<SuppliersPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="users" element={<UsersAuditPage />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
   )

@@ -52,6 +52,19 @@ def doi_trang_thai(tid: int, b: TTIn, u=Depends(can_vai_tro("KE_TOAN_AP"))):
         raise loi_db(e)
 
 
+@router.get("/tranh-chap")
+def ds_tranh_chap(u=Depends(can_vai_tro("KE_TOAN_AP", "QUAN_LY", "QUAN_TRI"))):
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT tc.*, h.so_hoa_don, h.trang_thai AS trang_thai_hd, nd.ho_ten AS ten_phu_trach
+            FROM tranh_chap tc
+            JOIN hoa_don h ON h.id = tc.hoa_don_id
+            JOIN nguoi_dung nd ON nd.id = tc.phu_trach_id
+            ORDER BY tc.ngay_mo DESC, tc.id DESC
+        """)).mappings()
+        return [dict(r) for r in rows]
+
+
 @router.get("/tranh-chap/{tid}")
 def xem_tranh_chap(tid: int, u=Depends(can_vai_tro("KE_TOAN_AP", "QUAN_LY", "QUAN_TRI"))):
     with engine.connect() as c:
