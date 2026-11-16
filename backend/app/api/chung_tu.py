@@ -49,6 +49,16 @@ def tao_anh_xa(b: AnhXa, u=Depends(can_vai_tro("MUA_HANG", "KE_TOAN_AP"))):
         raise loi_db(e)
 
 
+@router.get("/anh-xa-sku")
+def ds_anh_xa(ncc_id: Optional[int] = None, u=Depends(nguoi_dung)):
+    with engine.connect() as c:
+        if ncc_id is not None:
+            rows = c.execute(text("SELECT ax.*, n.ten AS ten_ncc FROM anh_xa_sku ax JOIN nha_cung_cap n ON n.id=ax.nha_cung_cap_id WHERE ax.nha_cung_cap_id=:n ORDER BY ax.id DESC"), {"n": ncc_id}).mappings()
+        else:
+            rows = c.execute(text("SELECT ax.*, n.ten AS ten_ncc FROM anh_xa_sku ax JOIN nha_cung_cap n ON n.id=ax.nha_cung_cap_id ORDER BY ax.id DESC")).mappings()
+        return [dict(r) for r in rows]
+
+
 # ---------- PO ----------
 class DongPOIn(BaseModel):
     ma_sku: str
@@ -65,6 +75,18 @@ class POIn(BaseModel):
     dieu_khoan_tt: Optional[str] = None
     tien_coc: D = D(0)
     dong: list[DongPOIn] = Field(min_length=1)
+
+
+@router.get("/po")
+def ds_po(u=Depends(nguoi_dung)):
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT p.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+            FROM don_hang_po p
+            JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            ORDER BY p.ngay_dat DESC, p.id DESC
+        """)).mappings()
+        return [dict(r) for r in rows]
 
 
 @router.post("/po", status_code=201)
@@ -108,6 +130,19 @@ class KhoIn(BaseModel):
     ngay_nhap: str
     file_pdf: Optional[str] = None
     dong: list[DongKho] = Field(min_length=1)
+
+
+@router.get("/phieu-kho")
+def ds_phieu_kho(u=Depends(nguoi_dung)):
+    with engine.connect() as c:
+        rows = c.execute(text("""
+            SELECT k.*, p.so_po, n.ten AS ten_ncc
+            FROM phieu_kho k
+            JOIN don_hang_po p ON p.id = k.po_id
+            JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            ORDER BY k.ngay_nhap DESC, k.id DESC
+        """)).mappings()
+        return [dict(r) for r in rows]
 
 
 @router.post("/phieu-kho", status_code=201)
@@ -167,10 +202,10 @@ def tao_hoa_don(b: HDIn, u=Depends(can_vai_tro("KE_TOAN_AP"))):
                     chua_anh_xa.append(d.ma_sku_ncc)
                 dong.append((r[0] if r else None, d, (d.so_luong * d.don_gia).quantize(Q2)))
             truoc = sum((x[2] for x in dong), D(0))
-            hid = c.execute(text("""INSERT INTO hoa_don(so_hoa_don,nha_cung_cap_id,po_id,ngay_lap,tong_truoc_vat,vat,tien_coc_tru,tong_thanh_toan,file_pdf,nguoi_tao_id)
-                VALUES(:so,:n,:p,:ngay,:t,:vat,:coc,:tt,:f,:u) RETURNING id"""),
+            hid = c.execute(text("""INSERT INTO hoa_don(so_hoa_don,nha_cung_cap_id,po_id,ngay_lap,tong_truoc_vat,vat,tien_coc_tru,tong_thanh_toan,file_pdf,ma_cqt,nguoi_tao_id)
+                VALUES(:so,:n,:p,:ngay,:t,:vat,:coc,:tt,:f,:cqt,:u) RETURNING id"""),
                 {"so": b.so_hoa_don, "n": b.nha_cung_cap_id, "p": b.po_id, "ngay": b.ngay_lap, "t": truoc, "vat": b.vat,
-                 "coc": b.tien_coc_tru, "tt": truoc + b.vat - b.tien_coc_tru, "f": b.file_pdf, "u": u["id"]}).scalar()
+                 "coc": b.tien_coc_tru, "tt": truoc + b.vat - b.tien_coc_tru, "f": b.file_pdf, "cqt": b.ma_cqt, "u": u["id"]}).scalar()
             for dpid, d, tt in dong:
                 c.execute(text("INSERT INTO dong_hoa_don(hoa_don_id,dong_po_id,ma_sku_ncc,so_luong,don_gia,thanh_tien) VALUES(:h,:dp,:s,:sl,:g,:tt)"),
                           {"h": hid, "dp": dpid, "s": d.ma_sku_ncc, "sl": d.so_luong, "g": d.don_gia, "tt": tt})
@@ -190,7 +225,7 @@ def tra_cuu_hoa_don(trang_thai: Optional[str] = None, ncc_id: Optional[int] = No
         if val is not None:
             where.append(col); p[key] = val
     with engine.connect() as c:
-        rows = c.execute(text(f"SELECT id,so_hoa_don,nha_cung_cap_id,po_id,ngay_lap,tong_thanh_toan,trang_thai,theo_ngoai_le FROM hoa_don "
+        rows = c.execute(text(f"SELECT id,so_hoa_don,nha_cung_cap_id,po_id,ngay_lap,tong_thanh_toan,trang_thai,theo_ngoai_le,ma_cqt FROM hoa_don "
                               f"WHERE {' AND '.join(where)} ORDER BY ngay_lap DESC, id DESC LIMIT :limit OFFSET :offset"), p).mappings()
         return [dict(r) for r in rows]
 
@@ -201,6 +236,11 @@ def xem_hoa_don(hid: int, u=Depends(nguoi_dung)):
         hd = c.execute(text("SELECT * FROM hoa_don WHERE id=:i"), {"i": hid}).mappings().first()
         if not hd:
             raise HTTPException(404, "Không có hóa đơn")
-        dong = [dict(r) for r in c.execute(text("SELECT * FROM dong_hoa_don WHERE hoa_don_id=:i ORDER BY id"), {"i": hid}).mappings()]
+        dong = [dict(r) for r in c.execute(text("""
+            SELECT dh.*, COALESCE(dp.mo_ta, 'Mặt hàng ' || dh.ma_sku_ncc) AS ten_san_pham
+            FROM dong_hoa_don dh
+            LEFT JOIN dong_po dp ON dp.id = dh.dong_po_id
+            WHERE dh.hoa_don_id=:i ORDER BY dh.id
+        """), {"i": hid}).mappings()]
         ds = [dict(r) for r in c.execute(text("SELECT * FROM lan_doi_soat WHERE hoa_don_id=:i ORDER BY thoi_gian DESC"), {"i": hid}).mappings()]
     return {**hd, "dong": dong, "lan_doi_soat": ds}

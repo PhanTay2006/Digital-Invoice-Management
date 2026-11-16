@@ -1,5 +1,13 @@
 from decimal import Decimal as D
-from app.infrastructure.pdf_parser import trich_hoa_don, trich_phieu_kho, so, ngay
+from app.infrastructure.pdf_parser import (
+    trich_hoa_don,
+    trich_phieu_kho,
+    trich_po,
+    nhan_dien_loai_chung_tu,
+    _sap_xep_ket_qua_ocr_theo_dong,
+    so,
+    ngay,
+)
 
 HD = """HÓA ĐƠN GTGT
 Số hóa đơn: HD-0457
@@ -34,3 +42,17 @@ def test_phieu_kho():
 
 def test_thieu_truong_co_canh_bao():
     assert len(trich_hoa_don("Số hóa đơn: X-1")["canh_bao"]) >= 4
+
+
+def test_nhan_dien_loai_chung_tu_va_ocr_line_grouping():
+    assert nhan_dien_loai_chung_tu(HD) == "INVOICE"
+    assert nhan_dien_loai_chung_tu(PK) == "GRN"
+    # Giả lập kết quả bounding box của PaddleOCR trên 1 dòng bảng hàng hóa
+    ocr_mock = [
+        [[[10, 100], [60, 100], [60, 120], [10, 120]], ("ABC-01", 0.99)],
+        [[[150, 102], [190, 102], [190, 120], [150, 120]], ("100", 0.98)],
+        [[[220, 101], [300, 101], [300, 120], [220, 120]], ("1.050.000", 0.99)],
+        [[[320, 100], [420, 100], [420, 120], [320, 120]], ("105.000.000", 0.99)],
+    ]
+    line = _sap_xep_ket_qua_ocr_theo_dong(ocr_mock)
+    assert line == "ABC-01 100 1.050.000 105.000.000"
