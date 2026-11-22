@@ -16,6 +16,7 @@ const TEN_BUOC = {
   c: 'Đối chiếu số lượng Hóa đơn với PO và Phiếu nhập kho (GRN)',
   d: 'Đối chiếu đơn giá trong ngưỡng dung sai',
   e: 'Kiểm tra tổng tiền, thuế VAT và khoản trừ cọc',
+  f: 'Đối chiếu Tên & MST Công ty mình trên Hóa đơn / Phiếu kho',
 }
 
 export default function MatchingPage() {
@@ -24,7 +25,11 @@ export default function MatchingPage() {
   const [suppliers, setSuppliers] = useState([])
   const [pos, setPos] = useState([])
   const [config, setConfig] = useState(null)
+  const [companyInfo, setCompanyInfo] = useState(null)
   const [selectedDetail, setSelectedDetail] = useState(null)
+  const [matchingId, setMatchingId] = useState(null)
+  const [confirmingId, setConfirmingId] = useState(null)
+  const [isBatchMatching, setIsBatchMatching] = useState(false)
   const [msg, setMsg] = useState(null)
 
   const canMatch = ['KE_TOAN_AP', 'TOAN_QUYEN'].includes(user?.vai_tro)
@@ -34,16 +39,18 @@ export default function MatchingPage() {
 
   async function loadData() {
     try {
-      const [hdList, cfg, nccList, poList] = await Promise.all([
+      const [hdList, cfg, nccList, poList, cty] = await Promise.all([
         apiFetch('/hoa-don'),
         apiFetch('/cau-hinh/hien-hanh').catch(() => null),
         apiFetch('/nha-cung-cap').catch(() => []),
         apiFetch('/po').catch(() => []),
+        apiFetch('/cong-ty').catch(() => null),
       ])
       setInvoices(hdList)
       setConfig(cfg)
       setSuppliers(nccList)
       setPos(poList)
+      setCompanyInfo(cty)
       if (hdList.length > 0 && !selectedDetail) {
         viewInvoiceMatching(hdList[0].id)
       }
@@ -66,68 +73,145 @@ export default function MatchingPage() {
   }
 
   async function runMatching(id) {
+    if (matchingId === id || isBatchMatching) return
     setMsg(null)
+    setMatchingId(id)
+    const t0 = performance.now()
     try {
       const res = await apiFetch(`/hoa-don/${id}/doi-soat`, { method: 'POST' })
+      const elapsedMs = Math.max(1, Math.round(performance.now() - t0))
       const label = TRANG_THAI_LABEL[res.ket_qua] || res.ket_qua
       setMsg({
         type: res.ket_qua === 'MATCHED' ? 'success' : 'error',
-        text: `Kết quả đối soát Hóa đơn #${id}: ${label}${res.lech_lon ? ` (Lệch lớn: ${Number(res.muc_lech_tien).toLocaleString('vi-VN')} ₫)` : ''}`,
+        text: `Kết quả đối soát Hóa đơn #${id}: ${label}${res.lech_lon ? ` (Lệch lớn: ${Number(res.muc_lech_tien).toLocaleString('vi-VN')} ₫)` : ''} — ${elapsedMs}ms`,
       })
-      await loadData()
-      await viewInvoiceMatching(id)
+      setInvoices((prev) =>
+        prev.map((inv) => (inv.id === id ? { ...inv, trang_thai: res.ket_qua } : inv))
+      )
+      if (selectedDetail?.id === id && res.lan_doi_soat) {
+        setSelectedDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                trang_thai: res.ket_qua,
+                lan_doi_soat: [res.lan_doi_soat, ...(prev.lan_doi_soat || [])],
+              }
+            : prev
+        )
+      } else {
+        await viewInvoiceMatching(id)
+      }
     } catch (err) {
       setMsg({ type: 'error', text: err.message })
+    } finally {
+      setMatchingId(null)
+    }
+  }
+
+  async function runBatchMatching() {
+    if (isBatchMatching || matchingId !== null) return
+    setMsg(null)
+    setIsBatchMatching(true)
+    const t0 = performance.now()
+    try {
+      const res = await apiFetch('/hoa-don/doi-soat-hang-loat', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      const elapsedMs = res.thoi_gian_ms ?? Math.max(1, Math.round(performance.now() - t0))
+      const hdList = await apiFetch('/hoa-don')
+      setInvoices(hdList)
+      if (selectedDetail && (res.ket_qua || []).some((x) => x.hoa_don_id === selectedDetail.id)) {
+        await viewInvoiceMatching(selectedDetail.id)
+      }
+      setMsg({
+        type: res.mismatch > 0 ? 'error' : 'success',
+        text: `Đã đối soát hàng loạt ${res.tong_xu_ly} hóa đơn trong ${elapsedMs}ms — Khớp: ${res.matched}, Khớp một phần: ${res.partial}, Lệch: ${res.mismatch}`,
+      })
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message })
+    } finally {
+      setIsBatchMatching(false)
     }
   }
 
   async function confirmReconciled(id) {
+    if (confirmingId === id || isBatchMatching) return
     setMsg(null)
+    setConfirmingId(id)
     try {
       await apiFetch(`/hoa-don/${id}/xac-nhan`, { method: 'POST' })
       setMsg({
         type: 'success',
         text: `Đã xác nhận hoàn tất đối soát và khóa Hóa đơn #${id} thành công!`,
       })
-      await loadData()
-      await viewInvoiceMatching(id)
+      setInvoices((prev) =>
+        prev.map((inv) => (inv.id === id ? { ...inv, trang_thai: 'RECONCILED' } : inv))
+      )
+      setSelectedDetail((prev) =>
+        prev && prev.id === id ? { ...prev, trang_thai: 'RECONCILED' } : prev
+      )
     } catch (err) {
       setMsg({ type: 'error', text: err.message })
+    } finally {
+      setConfirmingId(null)
     }
   }
+
+  const pendingCount = invoices.filter((inv) => inv.trang_thai === 'CHUA_DOI_SOAT').length
 
   return (
     <section className="module-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">ĐỐI SOÁT TỰ ĐỘNG</p>
           <h1>Đối soát 3 chiều</h1>
-          <p className="page-description">
-            Tự động so khớp dữ liệu Hóa đơn với Đơn đặt hàng (PO) và Phiếu nhập kho (GRN) theo các tiêu chuẩn dung sai.
-          </p>
         </div>
-        <div className="heading-actions">
-          <button className="button button-secondary" type="button" onClick={loadData}>↻ Làm mới</button>
+        <div className="heading-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {canMatch && pendingCount > 0 && (
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={runBatchMatching}
+              disabled={isBatchMatching || matchingId !== null}
+            >
+              {isBatchMatching ? '⏳ Đang đối soát...' : `⚡ Đối soát tất cả (${pendingCount})`}
+            </button>
+          )}
+          <button className="button button-secondary" type="button" onClick={loadData} disabled={isBatchMatching}>
+            ↻ Làm mới
+          </button>
         </div>
       </div>
 
-      {/* THÔNG TIN THAM SỐ DUNG SAI - BỎ ICON BÁNH RĂNG */}
-      {config && config.id && (
+      {(config?.id || companyInfo?.ten_cong_ty) && (
         <div
           style={{
             padding: '12px 18px',
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
-            borderRadius: 8,
+            borderRadius: 0,
             marginBottom: 20,
             fontSize: 13,
-            lineHeight: 1.5,
+            lineHeight: 1.6,
           }}
         >
-          <strong style={{ color: '#0f172a', marginRight: 10 }}>Tham số Dung sai đang áp dụng:</strong>
-          <span style={{ color: '#475569' }}>
-            Dung sai đơn giá: <b>{config.dung_sai_don_gia_pct}%</b> | Ngưỡng lệch lớn: <b>{config.nguong_lech_lon_pct}%</b> hoặc <b>{Number(config.nguong_lech_lon_tien).toLocaleString('vi-VN')} ₫</b> | Hạn mức duyệt ngoại lệ: <b>{Number(config.han_muc_duyet).toLocaleString('vi-VN')} ₫</b>
-          </span>
+          {companyInfo?.ten_cong_ty && (
+            <div>
+              <strong style={{ color: '#0f172a', marginRight: 8 }}>Công ty Bên mua (chuẩn đối soát):</strong>
+              <span style={{ color: '#1e293b' }}>
+                <b>{companyInfo.ten_cong_ty}</b> — MST: <b>{companyInfo.mst}</b>
+                {companyInfo.ma_cqt_quan_ly ? ` | Mã CQT quản lý: ${companyInfo.ma_cqt_quan_ly}` : ''}
+              </span>
+            </div>
+          )}
+          {config && config.id && (
+            <div>
+              <strong style={{ color: '#0f172a', marginRight: 10 }}>Tham số Dung sai đang áp dụng:</strong>
+              <span style={{ color: '#475569' }}>
+                Dung sai đơn giá: <b>{config.dung_sai_don_gia_pct}%</b> | Ngưỡng lệch lớn: <b>{config.nguong_lech_lon_pct}%</b> hoặc <b>{Number(config.nguong_lech_lon_tien).toLocaleString('vi-VN')} ₫</b> | Hạn mức duyệt ngoại lệ: <b>{Number(config.han_muc_duyet).toLocaleString('vi-VN')} ₫</b>
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -142,7 +226,6 @@ export default function MatchingPage() {
         <div className="panel-heading">
           <div>
             <h2>Danh sách Hóa đơn cần Đối soát ({invoices.length})</h2>
-            <p>Bấm vào từng hóa đơn để chạy đối soát hoặc xem chi tiết từng bước kiểm tra ở phần bên dưới</p>
           </div>
         </div>
 
@@ -211,8 +294,9 @@ export default function MatchingPage() {
                             className="button button-primary"
                             style={{ height: 32, padding: '0 12px', marginRight: 8, fontSize: 12.5 }}
                             onClick={() => runMatching(inv.id)}
+                            disabled={matchingId === inv.id || isBatchMatching}
                           >
-                            ⇄ Chạy đối soát
+                            {matchingId === inv.id ? '⏳ Đang đối soát...' : '⇄ Chạy đối soát'}
                           </button>
                         )}
                         {canMatch && inv.trang_thai === 'MATCHED' && (
@@ -221,8 +305,9 @@ export default function MatchingPage() {
                             className="button button-secondary"
                             style={{ height: 32, padding: '0 12px', fontSize: 12.5 }}
                             onClick={() => confirmReconciled(inv.id)}
+                            disabled={confirmingId === inv.id || isBatchMatching}
                           >
-                            ✓ Hoàn tất đối soát
+                            {confirmingId === inv.id ? '⏳ Đang khóa...' : '✓ Hoàn tất đối soát'}
                           </button>
                         )}
                       </td>
@@ -240,7 +325,6 @@ export default function MatchingPage() {
         <div className="panel-heading">
           <div>
             <h2>Chi tiết Kết quả từng Bước Kiểm tra</h2>
-            <p>Bảng kết quả so khớp chi tiết của hóa đơn đang chọn</p>
           </div>
           {selectedDetail && (
             <div>
@@ -274,7 +358,7 @@ export default function MatchingPage() {
                 padding: '12px 16px',
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
-                borderRadius: 8,
+                borderRadius: 0,
                 marginBottom: 16,
               }}
             >
@@ -284,6 +368,9 @@ export default function MatchingPage() {
                 <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
                 <span className="muted-cell" style={{ marginRight: 6 }}>Nhà cung cấp:</span>
                 <strong>{nccMap[selectedDetail.nha_cung_cap_id]?.ten || `NCC #${selectedDetail.nha_cung_cap_id}`}</strong>
+                <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
+                <span className="muted-cell" style={{ marginRight: 6 }}>Bên mua trên HĐ:</span>
+                <strong>{selectedDetail.ten_nguoi_mua || 'Chưa ghi'}</strong>
               </div>
               <div>
                 <span className="muted-cell" style={{ marginRight: 6 }}>Tổng thanh toán:</span>
@@ -303,7 +390,7 @@ export default function MatchingPage() {
                   ? lan.chi_tiet_buoc
                   : JSON.parse(lan.chi_tiet_buoc || '[]')
                 return (
-                  <div key={lan.id} className="detail-box" style={{ marginBottom: 18, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 18 }}>
+                  <div key={lan.id} className="detail-box" style={{ marginBottom: 18, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 0, padding: 18 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <div>
                         <strong style={{ fontSize: 14, color: '#0f172a' }}>
@@ -317,7 +404,7 @@ export default function MatchingPage() {
                     </div>
 
                     {lan.lech_lon && (
-                      <div className="alert-error" style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, background: '#fff0ee', border: '1px solid #fecaca', color: '#b91c1c' }}>
+                      <div className="alert-error" style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 0, background: '#fff0ee', border: '1px solid #fecaca', color: '#b91c1c' }}>
                         ⚠️ Đánh dấu <strong>LỆCH LỚN</strong> — Tổng tiền lệch: <b>{Number(lan.muc_lech_tien).toLocaleString('vi-VN')} ₫</b>
                       </div>
                     )}
@@ -328,7 +415,7 @@ export default function MatchingPage() {
                           <tr>
                             <th>BƯỚC KIỂM TRA</th>
                             <th>DỮ LIỆU TRÊN HÓA ĐƠN</th>
-                            <th>DỮ LIỆU THAM CHIẾU (PO / GRN)</th>
+                            <th>DỮ LIỆU THAM CHIẾU (PO / GRN / CÔNG TY)</th>
                             <th style={{ textAlign: 'center' }}>KẾT QUẢ</th>
                             <th>CHI TIẾT ĐỐI CHIẾU</th>
                           </tr>

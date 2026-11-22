@@ -3,9 +3,7 @@ export default function ModulePlaceholderPage({ title, description }) {
     <section className="placeholder-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">WORKSPACE MODULE</p>
           <h1>{title}</h1>
-          <p className="page-description">{description}</p>
         </div>
       </div>
       <div className="placeholder-card">

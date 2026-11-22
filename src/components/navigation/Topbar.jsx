@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { apiFetch } from '../../services/api'
+import { canAccessRoute } from '../../constants/permissions'
 
 const pageNames = {
   dashboard: 'Tổng quan',
@@ -10,6 +11,7 @@ const pageNames = {
   'goods-receipts': 'Phiếu nhập kho (GRN)',
   matching: 'Đối soát 3 chiều (3-Way Matching)',
   exceptions: 'Tranh chấp & Duyệt ngoại lệ',
+  company: 'Thông tin công ty',
   suppliers: 'Nhà cung cấp & Ánh xạ SKU',
   reports: 'Báo cáo & Kết xuất dữ liệu',
   users: 'Quản trị Hệ thống & Phân quyền',
@@ -20,6 +22,7 @@ export default function Topbar() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const [unread, setUnread] = useState(0)
+  const canViewExceptions = canAccessRoute(user?.vai_tro, '/exceptions')
 
   const current = location.pathname.split('/').filter(Boolean).at(-1) || 'dashboard'
   const pageName = pageNames[current] || 'Tổng quan'
@@ -44,16 +47,19 @@ export default function Topbar() {
       </div>
 
       <div className="topbar-actions">
-        <button
-          className="icon-button notification-button"
-          type="button"
-          title={`Thông báo chưa đọc: ${unread}`}
-          onClick={() => navigate('/exceptions')}
-        >
-          🔔{unread > 0 && <span className="notif-count">{unread}</span>}
-        </button>
-
-        <div className="topbar-divider" />
+        {canViewExceptions && (
+          <>
+            <button
+              className="icon-button notification-button"
+              type="button"
+              title={`Thông báo chưa đọc: ${unread}`}
+              onClick={() => navigate('/exceptions')}
+            >
+              🔔{unread > 0 && <span className="notif-count">{unread}</span>}
+            </button>
+            <div className="topbar-divider" />
+          </>
+        )}
 
         <div className="profile-button">
           <div className="profile-avatar">
@@ -61,7 +67,7 @@ export default function Topbar() {
           </div>
           <div className="profile-copy">
             <strong>{user?.ho_ten || 'Người dùng'}</strong>
-            <span>@{user?.ten_dang_nhap || 'user'}</span>
+            <span>{user?.ten_vai_tro || `@${user?.ten_dang_nhap || 'user'}`}</span>
           </div>
         </div>
 

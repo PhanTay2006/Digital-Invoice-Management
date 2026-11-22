@@ -1,5 +1,5 @@
 from decimal import Decimal as D
-from app.domain.doi_soat import doi_soat, Cau_hinh
+from app.domain.matching import doi_soat, Cau_hinh
 
 CFG = Cau_hinh(D(2), D(5), D(5_000_000), D(10_000_000))
 PO = {"nha_cung_cap_id": 1, "loai_po": "HANG_HOA", "tien_coc": D(0)}

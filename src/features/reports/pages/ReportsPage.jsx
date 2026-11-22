@@ -1,13 +1,31 @@
 import { useState } from 'react'
 import { getStoredToken } from '../../../services/api'
+import { useAuth } from '../../../contexts/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
 export default function ReportsPage() {
+  const { user } = useAuth()
+  const canExport = ['KE_TOAN_AP', 'QUAN_LY', 'QUAN_TRI', 'TOAN_QUYEN'].includes(user?.vai_tro)
   const [trangThai, setTrangThai] = useState('')
   const [tuNgay, setTuNgay] = useState('')
   const [denNgay, setDenNgay] = useState('')
   const [msg, setMsg] = useState(null)
+
+  if (!canExport) {
+    return (
+      <section className="module-page">
+        <div className="page-heading">
+          <div>
+            <h1>Báo cáo Đối soát & Xuất File (Excel / CSV)</h1>
+          </div>
+        </div>
+        <div className="role-notice">
+          Chức năng Báo cáo &amp; Kết xuất dữ liệu chỉ dành cho <strong>Kế toán AP</strong>, <strong>Quản lý (Kế toán trưởng)</strong> và <strong>Quản trị hệ thống</strong>.
+        </div>
+      </section>
+    )
+  }
 
   async function downloadReport(ext) {
     setMsg(null)
@@ -39,11 +57,7 @@ export default function ReportsPage() {
     <section className="module-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">BÁO CÁO & KẾT XUẤT DỮ LIỆU</p>
           <h1>Báo cáo Đối soát & Xuất File (Excel / CSV)</h1>
-          <p className="page-description">
-            Xuất dữ liệu hóa đơn và kết quả đối soát chuẩn bảng mã UTF-8 tiếng Việt, bảo mật và tương thích các phần mềm kế toán.
-          </p>
         </div>
       </div>
 
@@ -57,7 +71,6 @@ export default function ReportsPage() {
         <div className="panel-heading">
           <div>
             <h2>Bộ lọc Báo cáo Hóa đơn B2B</h2>
-            <p>Chọn điều kiện lọc trước khi tải file</p>
           </div>
         </div>
         <div className="crud-form">

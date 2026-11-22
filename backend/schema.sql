@@ -21,6 +21,60 @@ CREATE TABLE IF NOT EXISTS nguoi_dung (
 );
 
 -- -----------------------------------------------------------------------------
+-- 1b. BẢNG HỒ SƠ PHÁP LÝ CÔNG TY BÊN MUA (Chuẩn Luật DN 2020 & NĐ 123/TT 78)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS thong_tin_cong_ty (
+    id                      SERIAL PRIMARY KEY,
+    ten_cong_ty             VARCHAR(255) NOT NULL,
+    ten_tieng_anh           VARCHAR(255),
+    ten_viet_tat            VARCHAR(100),
+    loai_hinh_dn            VARCHAR(100),
+    mst                     VARCHAR(14) NOT NULL,
+    ma_cqt_quan_ly          VARCHAR(50),
+    co_quan_thue_quan_ly    VARCHAR(255),
+    dia_chi                 TEXT NOT NULL,
+    nguoi_dai_dien          VARCHAR(200),
+    chuc_vu_dai_dien        VARCHAR(120),
+    so_giay_phep_dkkd       VARCHAR(100),
+    ngay_cap_dkkd           DATE,
+    noi_cap_dkkd            VARCHAR(255),
+    so_tai_khoan            VARCHAR(100),
+    ngan_hang               VARCHAR(255),
+    dien_thoai              VARCHAR(50),
+    email                   VARCHAR(150),
+    website                 VARCHAR(200),
+    ngay_cap_nhat           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    nguoi_cap_nhat_id       INT REFERENCES nguoi_dung(id)
+);
+
+INSERT INTO thong_tin_cong_ty (
+    ten_cong_ty, ten_tieng_anh, ten_viet_tat, loai_hinh_dn,
+    mst, ma_cqt_quan_ly, co_quan_thue_quan_ly, dia_chi,
+    nguoi_dai_dien, chuc_vu_dai_dien, so_giay_phep_dkkd, ngay_cap_dkkd, noi_cap_dkkd,
+    so_tai_khoan, ngan_hang, dien_thoai, email, website
+)
+SELECT
+    'CÔNG TY CỔ PHẦN BÁNH VIỆT NAM',
+    'VIETNAM BAKERY JOINT STOCK COMPANY',
+    'BANH VN JSC',
+    'Công ty cổ phần',
+    '0108666888',
+    '70115',
+    'Thuế TP. Hồ Chí Minh - Thuế cơ sở 7 (Khu vực Phường Tân Hưng)',
+    'A41, Khu dân cư Kim Sơn, Phường Tân Hưng, Thành phố Hồ Chí Minh',
+    'Nguyễn Minh Hoàng',
+    'Tổng Giám đốc',
+    '0108666888',
+    DATE '2022-05-15',
+    'Phòng Đăng ký kinh doanh - Sở Tài chính TP. Hồ Chí Minh',
+    '0071001234568',
+    'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank) - CN TP. Hồ Chí Minh',
+    '(028) 3876 6888',
+    'ketoan@banhvietnam.vn',
+    'https://banhvietnam.vn'
+WHERE NOT EXISTS (SELECT 1 FROM thong_tin_cong_ty);
+
+-- -----------------------------------------------------------------------------
 -- 2. BẢNG CẤU HÌNH DUNG SAI & NGƯỠNG ĐỐI SOÁT (F-17, BR-24)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cau_hinh_doi_soat (
@@ -49,6 +103,7 @@ CREATE TABLE IF NOT EXISTS anh_xa_sku (
     nha_cung_cap_id INT NOT NULL REFERENCES nha_cung_cap(id) ON DELETE CASCADE,
     ma_sku_ncc      VARCHAR(100) NOT NULL,
     ma_sku_noi_bo   VARCHAR(100) NOT NULL,
+    ten_san_pham    VARCHAR(255),
     UNIQUE (nha_cung_cap_id, ma_sku_ncc)
 );
 
@@ -91,6 +146,8 @@ CREATE TABLE IF NOT EXISTS phieu_kho (
     ngay_nhap       DATE NOT NULL,
     trang_thai      VARCHAR(30) NOT NULL DEFAULT 'PARTIAL' CHECK (trang_thai IN ('PARTIAL', 'CONFIRMED')),
     file_pdf        VARCHAR(255),
+    ten_don_vi      VARCHAR(255),
+    mst_don_vi      VARCHAR(20),
     nguoi_lap_id    INT REFERENCES nguoi_dung(id),
     ngay_tao        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -124,6 +181,8 @@ CREATE TABLE IF NOT EXISTS hoa_don (
     theo_ngoai_le   BOOLEAN NOT NULL DEFAULT FALSE,
     file_pdf        VARCHAR(255),
     ma_cqt          VARCHAR(100),
+    ten_nguoi_mua   VARCHAR(255),
+    mst_nguoi_mua   VARCHAR(20),
     nguoi_tao_id    INT REFERENCES nguoi_dung(id),
     ngay_tao        TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (nha_cung_cap_id, so_hoa_don)
@@ -134,6 +193,7 @@ CREATE TABLE IF NOT EXISTS dong_hoa_don (
     hoa_don_id      INT NOT NULL REFERENCES hoa_don(id) ON DELETE CASCADE,
     dong_po_id      INT REFERENCES dong_po(id),
     ma_sku_ncc      VARCHAR(100) NOT NULL,
+    ten_san_pham    VARCHAR(255),
     so_luong        NUMERIC(18, 2) NOT NULL CHECK (so_luong > 0),
     don_gia         NUMERIC(18, 2) NOT NULL CHECK (don_gia >= 0),
     thanh_tien      NUMERIC(18, 2) NOT NULL CHECK (thanh_tien >= 0)
@@ -483,6 +543,7 @@ DECLARE
 BEGIN
     FOREACH t IN ARRAY ARRAY[
         'nguoi_dung',
+        'thong_tin_cong_ty',
         'cau_hinh_doi_soat',
         'nha_cung_cap',
         'don_hang_po',

@@ -77,16 +77,159 @@ export function createLocalToken(userObj) {
 }
 
 // Khởi tạo dữ liệu mẫu dự phòng khi Docker/Backend chưa bật
+export const DEFAULT_COMPANY_INFO = {
+  id: 1,
+  ten_cong_ty: 'CÔNG TY CỔ PHẦN BÁNH VIỆT NAM',
+  ten_tieng_anh: 'VIETNAM BAKERY JOINT STOCK COMPANY',
+  ten_viet_tat: 'BANH VN JSC',
+  loai_hinh_dn: 'Công ty cổ phần',
+  mst: '0108666888',
+  ma_cqt_quan_ly: '70115',
+  co_quan_thue_quan_ly: 'Thuế TP. Hồ Chí Minh - Thuế cơ sở 7 (Khu vực Phường Tân Hưng)',
+  dia_chi: 'A41, Khu dân cư Kim Sơn, Phường Tân Hưng, Thành phố Hồ Chí Minh',
+  nguoi_dai_dien: 'Nguyễn Minh Hoàng',
+  chuc_vu_dai_dien: 'Tổng Giám đốc',
+  so_giay_phep_dkkd: '0108666888',
+  ngay_cap_dkkd: '2022-05-15',
+  noi_cap_dkkd: 'Phòng Đăng ký kinh doanh - Sở Tài chính TP. Hồ Chí Minh',
+  so_tai_khoan: '0071001234568',
+  ngan_hang: 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank) - CN TP. Hồ Chí Minh',
+  dien_thoai: '(028) 3876 6888',
+  email: 'ketoan@banhvietnam.vn',
+  website: 'https://banhvietnam.vn',
+}
+
+function normalizeCompanyNameLocal(name) {
+  const s = String(name || '')
+    .trim()
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[.,\-&/()_]+/g, ' ')
+  if (!s) return ''
+  const map = {
+    CTY: 'CONG TY',
+    CP: 'CO PHAN',
+    TNHH: 'TRACH NHIEM HUU HAN',
+    TM: 'THUONG MAI',
+    DV: 'DICH VU',
+    SX: 'SAN XUAT',
+    XNK: 'XUAT NHAP KHAU',
+    VN: 'VIET NAM',
+  }
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap((tok) => (map[tok] || tok).split(' '))
+    .join(' ')
+}
+
+export function verifyCompanyBuyer(tenPhieu, mstPhieu, congTy, { requireName = false } = {}) {
+  const hs = congTy || DEFAULT_COMPANY_INFO
+  const ten = (tenPhieu || '').trim() || null
+  const mst = (mstPhieu || '').replace(/[\s.]+/g, '').trim() || null
+  if (!ten && !mst) {
+    if (requireName) {
+      return {
+        trang_thai: 'THIEU_TEN_CONG_TY',
+        dat: false,
+        ten_khop: false,
+        mst_khop: null,
+        gia_tri_hd: 'Chưa ghi trên hóa đơn',
+        gia_tri_tc: `${hs.ten_cong_ty} | MST: ${hs.mst}`,
+        thong_bao: `Chưa có Tên Công ty Bên mua trên chứng từ (yêu cầu khớp '${hs.ten_cong_ty}')`,
+      }
+    }
+    return {
+      trang_thai: 'CHUA_NHAN_DIEN',
+      dat: true,
+      gia_tri_hd: 'Chưa ghi trên hóa đơn',
+      gia_tri_tc: `${hs.ten_cong_ty} | MST: ${hs.mst}`,
+      thong_bao: 'Chưa nhận diện được thông tin bên mua trên chứng từ',
+    }
+  }
+  const candidates = new Set(
+    [hs.ten_cong_ty, hs.ten_tieng_anh, hs.ten_viet_tat]
+      .filter(Boolean)
+      .map(normalizeCompanyNameLocal)
+      .filter(Boolean)
+  )
+  const tenOk = ten ? candidates.has(normalizeCompanyNameLocal(ten)) : !requireName
+  const mstOk = mst ? mst === String(hs.mst || '').replace(/[\s.]+/g, '') : true
+  if (requireName && !ten) {
+    return {
+      trang_thai: 'THIEU_TEN_CONG_TY',
+      dat: false,
+      ten_khop: false,
+      mst_khop: mst ? mstOk : null,
+      gia_tri_hd: mst ? `MST: ${mst}` : 'Chưa ghi trên hóa đơn',
+      gia_tri_tc: `${hs.ten_cong_ty} | MST: ${hs.mst}`,
+      thong_bao: `Chưa có Tên Công ty Bên mua trên chứng từ (yêu cầu khớp '${hs.ten_cong_ty}')`,
+    }
+  }
+  const dat = tenOk && mstOk
+  return {
+    trang_thai: dat ? 'KHOP' : 'KHONG_KHOP',
+    dat,
+    ten_khop: ten ? tenOk : null,
+    mst_khop: mst ? mstOk : null,
+    gia_tri_hd: [ten, mst ? `MST: ${mst}` : null].filter(Boolean).join(' | '),
+    gia_tri_tc: `${hs.ten_cong_ty} | MST: ${hs.mst}`,
+    thong_bao: dat
+      ? 'Khớp Tên và MST công ty'
+      : `Sai thông tin Công ty Bên mua (${ten || '—'} / MST: ${mst || '—'} ≠ ${hs.ten_cong_ty} / MST: ${hs.mst})`,
+  }
+}
+
+function buildCompanyMatchStepLocal(hd, po, db) {
+  const ktHd = verifyCompanyBuyer(hd.ten_nguoi_mua, hd.mst_nguoi_mua, db.cong_ty, { requireName: true })
+  const grns = po?.loai_po === 'DICH_VU' ? [] : (db.phieu_kho || []).filter((pk) => pk.po_id === hd.po_id)
+  const grnErrors = []
+  const grnNotes = []
+  for (const pk of grns) {
+    if (pk.ten_don_vi || pk.mst_don_vi) {
+      const ktPk = verifyCompanyBuyer(pk.ten_don_vi, pk.mst_don_vi, db.cong_ty, { requireName: false })
+      if (!ktPk.dat) {
+        grnErrors.push(`Phiếu kho ${pk.so_phieu || `#${pk.id}`}: ${ktPk.thong_bao}`)
+        grnNotes.push(`GRN ${pk.so_phieu || `#${pk.id}`}: ${pk.ten_don_vi || '—'}${pk.mst_don_vi ? ` (MST: ${pk.mst_don_vi})` : ''}`)
+      }
+    }
+  }
+  const dat = ktHd.dat && grnErrors.length === 0
+  const giaTriHd = grnNotes.length ? `${ktHd.gia_tri_hd} || ${grnNotes.join('; ')}` : ktHd.gia_tri_hd
+  const reasons = []
+  if (!ktHd.dat) reasons.push(ktHd.thong_bao)
+  reasons.push(...grnErrors)
+  return {
+    dat,
+    step: {
+      ma_buoc: 'f',
+      dat,
+      gia_tri_hoa_don: giaTriHd,
+      gia_tri_tham_chieu: ktHd.gia_tri_tc,
+      ly_do: dat ? '' : reasons.join('; '),
+    },
+  }
+}
+
 function getLocalDb() {
   const raw = localStorage.getItem(LOCAL_DB_KEY)
   if (raw) {
     try {
-      return JSON.parse(raw)
+      const parsed = JSON.parse(raw)
+      if (!parsed.cong_ty) {
+        parsed.cong_ty = { ...DEFAULT_COMPANY_INFO }
+        localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(parsed))
+      }
+      return parsed
     } catch {
       // reset below
     }
   }
   const init = {
+    cong_ty: { ...DEFAULT_COMPANY_INFO },
     nguoi_dung: [
       { id: 1, ten_dang_nhap: 'admin', ho_ten: 'Quản trị hệ thống', vai_tro: 'QUAN_TRI', hoat_dong: true },
       { id: 2, ten_dang_nhap: 'muahang', ho_ten: 'Nhân viên Mua hàng', vai_tro: 'MUA_HANG', hoat_dong: true },
@@ -202,7 +345,12 @@ function pickTokenForEndpoint(path, method) {
   if (path.startsWith('/hoa-don') && method === 'POST') return roleTokens.KE_TOAN_AP || mainToken
   if (path.includes('/tranh-chap') && method !== 'GET') return roleTokens.KE_TOAN_AP || mainToken
   if (path.startsWith('/yeu-cau-duyet') && method === 'PUT') return roleTokens.QUAN_LY || mainToken
-  if (path.startsWith('/nguoi-dung') || path.startsWith('/cau-hinh') || path.startsWith('/audit-log')) {
+  if (
+    path.startsWith('/nguoi-dung') ||
+    path.startsWith('/cau-hinh') ||
+    path.startsWith('/audit-log') ||
+    (path.startsWith('/cong-ty') && method !== 'GET')
+  ) {
     return roleTokens.QUAN_TRI || mainToken
   }
   return roleTokens.KE_TOAN_AP || roleTokens.QUAN_TRI || mainToken
@@ -274,6 +422,8 @@ function handleLocalFallback(path, options = {}) {
       po_id: Number(body.po_id),
       so_po: po?.so_po || `PO-${body.po_id}`,
       ten_ncc: po?.ten_ncc || 'Công ty ABC',
+      ten_don_vi: body.ten_don_vi || null,
+      mst_don_vi: body.mst_don_vi || null,
       ngay_nhap: body.ngay_nhap,
       trang_thai: 'CONFIRMED',
       dong: body.dong,
@@ -326,6 +476,8 @@ function handleLocalFallback(path, options = {}) {
       tien_coc_tru,
       tong_thanh_toan,
       ma_cqt: body.ma_cqt || '',
+      ten_nguoi_mua: body.ten_nguoi_mua || null,
+      mst_nguoi_mua: body.mst_nguoi_mua || null,
       trang_thai: 'CHUA_DOI_SOAT',
       theo_ngoai_le: false,
       dong,
@@ -356,14 +508,16 @@ function handleLocalFallback(path, options = {}) {
         }
       }
     }
+    const ktCty = buildCompanyMatchStepLocal(hd, po, db)
     const chi_tiet_buoc = [
       { ma_buoc: 'a', dat: hd.nha_cung_cap_id === po.nha_cung_cap_id, gia_tri_hoa_don: String(hd.nha_cung_cap_id), gia_tri_tham_chieu: String(po.nha_cung_cap_id), ly_do: '' },
       { ma_buoc: 'b', dat: true, gia_tri_hoa_don: '0', gia_tri_tham_chieu: '0', ly_do: '' },
       { ma_buoc: 'c', dat: true, gia_tri_hoa_don: '100', gia_tri_tham_chieu: '100', ly_do: '' },
       { ma_buoc: 'd', dat: gia_ok, gia_tri_hoa_don: '', gia_tri_tham_chieu: '', ly_do: gia_ly_do },
       { ma_buoc: 'e', dat: true, gia_tri_hoa_don: String(hd.tong_thanh_toan), gia_tri_tham_chieu: String(hd.tong_thanh_toan), ly_do: '' },
+      ktCty.step,
     ]
-    const ket_qua = gia_ok ? 'MATCHED' : 'MISMATCH'
+    const ket_qua = gia_ok && ktCty.dat ? 'MATCHED' : 'MISMATCH'
     const lech_lon = ket_qua === 'MISMATCH' && lech_tien >= cfg.nguong_lech_lon_tien
     const lan = {
       id: (hd.lan_doi_soat?.length || 0) + 1,
@@ -377,7 +531,58 @@ function handleLocalFallback(path, options = {}) {
     hd.lan_doi_soat = [lan, ...(hd.lan_doi_soat || [])]
     addLocalAudit(db, 'INSERT', 'lan_doi_soat', lan.id, { hoa_don_id: hid, ket_qua, lech_lon })
     saveLocalDb(db)
-    return { lan_doi_soat_id: lan.id, ...lan }
+    return { lan_doi_soat_id: lan.id, hoa_don_id: hid, trang_thai: ket_qua, lan_doi_soat: lan, ...lan }
+  }
+
+  if (path === '/hoa-don/doi-soat-hang-loat' && method === 'POST') {
+    const ids = Array.isArray(body?.hoa_don_ids) && body.hoa_don_ids.length
+      ? new Set(body.hoa_don_ids.map(Number))
+      : null
+    const targets = db.hoa_don.filter((h) => (ids ? ids.has(h.id) && h.trang_thai !== 'RECONCILED' : h.trang_thai === 'CHUA_DOI_SOAT'))
+    const counts = { MATCHED: 0, PARTIAL: 0, MISMATCH: 0 }
+    const ket_qua = []
+    for (const hd of targets) {
+      const po = db.po.find((p) => p.id === hd.po_id) || db.po[0]
+      const cfg = db.cau_hinh
+      let lech_tien = 0
+      let gia_ok = true
+      let gia_ly_do = ''
+      for (const d of hd.dong || []) {
+        const dp = po?.dong?.find((x) => x.id === d.dong_po_id) || po?.dong?.[0]
+        if (dp && dp.don_gia > 0) {
+          const pct = Math.abs(d.don_gia - dp.don_gia) / dp.don_gia * 100
+          if (pct > cfg.dung_sai_don_gia_pct) {
+            gia_ok = false
+            gia_ly_do = `Đơn giá lệch ${pct.toFixed(0)}% > dung sai ${cfg.dung_sai_don_gia_pct}%`
+            lech_tien += Math.abs(d.don_gia - dp.don_gia) * d.so_luong
+          }
+        }
+      }
+      const ktCty = buildCompanyMatchStepLocal(hd, po, db)
+      const resStatus = gia_ok && ktCty.dat ? 'MATCHED' : 'MISMATCH'
+      const lech_lon = resStatus === 'MISMATCH' && lech_tien >= cfg.nguong_lech_lon_tien
+      const lan = {
+        id: (hd.lan_doi_soat?.length || 0) + 1,
+        thoi_gian: new Date().toISOString(),
+        ket_qua: resStatus,
+        lech_lon,
+        muc_lech_tien: lech_tien || null,
+        chi_tiet_buoc: [
+          { ma_buoc: 'a', dat: hd.nha_cung_cap_id === po?.nha_cung_cap_id, gia_tri_hoa_don: String(hd.nha_cung_cap_id), gia_tri_tham_chieu: String(po?.nha_cung_cap_id || ''), ly_do: '' },
+          { ma_buoc: 'b', dat: true, gia_tri_hoa_don: '0', gia_tri_tham_chieu: '0', ly_do: '' },
+          { ma_buoc: 'c', dat: true, gia_tri_hoa_don: '100', gia_tri_tham_chieu: '100', ly_do: '' },
+          { ma_buoc: 'd', dat: gia_ok, gia_tri_hoa_don: '', gia_tri_tham_chieu: '', ly_do: gia_ly_do },
+          { ma_buoc: 'e', dat: true, gia_tri_hoa_don: String(hd.tong_thanh_toan), gia_tri_tham_chieu: String(hd.tong_thanh_toan), ly_do: '' },
+          ktCty.step,
+        ],
+      }
+      hd.trang_thai = resStatus
+      hd.lan_doi_soat = [lan, ...(hd.lan_doi_soat || [])]
+      counts[resStatus] += 1
+      ket_qua.push({ hoa_don_id: hd.id, lan_doi_soat_id: lan.id, ket_qua: resStatus, lech_lon, muc_lech_tien: lech_tien || null })
+    }
+    saveLocalDb(db)
+    return { tong_xu_ly: ket_qua.length, matched: counts.MATCHED, partial: counts.PARTIAL, mismatch: counts.MISMATCH, ket_qua, thoi_gian_ms: 1 }
   }
 
   if (path.match(/^\/hoa-don\/\d+\/xac-nhan$/) && method === 'POST') {
@@ -487,6 +692,15 @@ function handleLocalFallback(path, options = {}) {
     }
   }
 
+  if (path === '/cong-ty') {
+    if (method === 'PUT') {
+      db.cong_ty = { ...(db.cong_ty || DEFAULT_COMPANY_INFO), ...body, ngay_cap_nhat: new Date().toISOString() }
+      addLocalAudit(db, 'UPDATE', 'thong_tin_cong_ty', db.cong_ty.id || 1, db.cong_ty)
+      saveLocalDb(db)
+    }
+    return db.cong_ty || DEFAULT_COMPANY_INFO
+  }
+
   if (path.startsWith('/cau-hinh')) {
     if (method === 'POST') {
       db.cau_hinh = { ...db.cau_hinh, ...body, id: (db.cau_hinh.id || 1) + 1 }
@@ -505,6 +719,24 @@ function handleLocalFallback(path, options = {}) {
     addLocalAudit(db, 'INSERT', 'nguoi_dung', id, u)
     saveLocalDb(db)
     return { id }
+  }
+  const userPutMatch = path.match(/^\/nguoi-dung\/(\d+)$/)
+  if (userPutMatch && method === 'PUT') {
+    const uid = Number(userPutMatch[1])
+    const idx = db.nguoi_dung.findIndex((item) => item.id === uid)
+    if (idx === -1) throw new Error('Không có người dùng')
+    const { mat_khau, ...rest } = body
+    db.nguoi_dung[idx] = { ...db.nguoi_dung[idx], ...rest }
+    addLocalAudit(db, 'UPDATE', 'nguoi_dung', uid, rest)
+    saveLocalDb(db)
+    return rest
+  }
+  if (userPutMatch && method === 'DELETE') {
+    const uid = Number(userPutMatch[1])
+    db.nguoi_dung = db.nguoi_dung.filter((item) => item.id !== uid)
+    addLocalAudit(db, 'DELETE', 'nguoi_dung', uid, { deleted: uid })
+    saveLocalDb(db)
+    return { deleted: uid }
   }
 
   if (path.startsWith('/audit-log')) return db.audit_log
@@ -538,12 +770,30 @@ export async function apiFetch(path, options = {}) {
       if (res.status === 404 || res.status === 405) {
         return handleLocalFallback(path, options)
       }
-      const detail = typeof data === 'object' && data !== null ? data.detail || JSON.stringify(data) : data
+      let detail = `Lỗi HTTP ${res.status}`
+      if (typeof data === 'object' && data !== null) {
+        if (Array.isArray(data.detail)) {
+          detail = data.detail
+            .map((item) => {
+              const msg = typeof item === 'object' && item !== null ? item.msg || JSON.stringify(item) : String(item)
+              return msg.replace(/^Value error,\s*/i, '')
+            })
+            .filter(Boolean)
+            .join('; ')
+        } else if (data.detail) {
+          detail = String(data.detail)
+        } else {
+          detail = JSON.stringify(data)
+        }
+      } else if (data) {
+        detail = String(data)
+      }
       throw new Error(detail || `Lỗi HTTP ${res.status}`)
     }
 
     return data
   } catch (err) {
+    if (err?.name === 'AbortError') throw err
     // Nếu không kết nối được tới cổng 8000 (chưa bật Docker), tự động chạy trên dữ liệu mẫu LocalDB
     if (err instanceof TypeError || String(err.message).includes('Failed to fetch') || String(err.message).includes('NetworkError')) {
       if (path === '/dang-nhap') throw err

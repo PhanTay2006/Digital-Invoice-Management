@@ -141,11 +141,7 @@ export default function ExceptionsPage() {
     <section className="module-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">XỬ LÝ TRANH CHẤP & PHÊ DUYỆT NGOẠI LỆ</p>
           <h1>Quản lý Tranh chấp & Duyệt Ngoại lệ Lệch lớn</h1>
-          <p className="page-description">
-            Theo dõi và xử lý các hóa đơn lệch dữ liệu với Nhà cung cấp, phê duyệt hóa đơn lệch theo hạn mức quy định.
-          </p>
         </div>
         <div className="heading-actions">
           <button className="button button-secondary" type="button" onClick={loadData}>↻ Làm mới</button>
@@ -163,7 +159,6 @@ export default function ExceptionsPage() {
           <div className="panel-heading">
             <div>
               <h2>Hồ sơ Tranh chấp ({disputes.length})</h2>
-              <p>Bấm vào từng dòng để xem lịch sử trao đổi và gửi yêu cầu duyệt ngoại lệ</p>
             </div>
           </div>
 
@@ -276,7 +271,6 @@ export default function ExceptionsPage() {
           <div className="panel-heading">
             <div>
               <h2>Yêu cầu Duyệt Ngoại lệ Lệch lớn ({approvals.length})</h2>
-              <p>Quyền phê duyệt: <strong>Quản lý / Kế toán trưởng</strong></p>
             </div>
           </div>
 

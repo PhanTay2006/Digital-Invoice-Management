@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../../../services/api'
 import { useAuth } from '../../../contexts/AuthContext'
+import { validateSupplierForm, validateSkuMappingForm } from '../../../utils/validation'
 
 export default function SuppliersPage() {
   const { user } = useAuth()
@@ -15,6 +16,9 @@ export default function SuppliersPage() {
   const [nccId, setNccId] = useState('')
   const [maSkuNcc, setMaSkuNcc] = useState('')
   const [maSkuNoiBo, setMaSkuNoiBo] = useState('')
+  const [tenSanPham, setTenSanPham] = useState('')
+  const [supplierErrors, setSupplierErrors] = useState({})
+  const [skuErrors, setSkuErrors] = useState({})
 
   const canCreateNcc = ['MUA_HANG', 'QUAN_TRI', 'TOAN_QUYEN'].includes(user?.vai_tro)
   const canMapSku = ['MUA_HANG', 'KE_TOAN_AP', 'TOAN_QUYEN'].includes(user?.vai_tro)
@@ -42,6 +46,13 @@ export default function SuppliersPage() {
   async function handleAddSupplier(e) {
     e.preventDefault()
     setMsg(null)
+    const check = validateSupplierForm({ ten, mst })
+    if (!check.valid) {
+      setSupplierErrors(check.errors)
+      setMsg({ type: 'error', text: check.summary })
+      return
+    }
+    setSupplierErrors({})
     try {
       const res = await apiFetch('/nha-cung-cap', {
         method: 'POST',
@@ -51,6 +62,7 @@ export default function SuppliersPage() {
       setTen('')
       setMst('')
       setDiaChi('')
+      setSupplierErrors({})
       await loadData()
     } catch (err) {
       setMsg({ type: 'error', text: err.message })
@@ -60,6 +72,13 @@ export default function SuppliersPage() {
   async function handleAddMapping(e) {
     e.preventDefault()
     setMsg(null)
+    const check = validateSkuMappingForm({ nccId, maSkuNcc, maSkuNoiBo })
+    if (!check.valid) {
+      setSkuErrors(check.errors)
+      setMsg({ type: 'error', text: check.summary })
+      return
+    }
+    setSkuErrors({})
     try {
       const res = await apiFetch('/anh-xa-sku', {
         method: 'POST',
@@ -67,11 +86,14 @@ export default function SuppliersPage() {
           nha_cung_cap_id: Number(nccId),
           ma_sku_ncc: maSkuNcc.trim(),
           ma_sku_noi_bo: maSkuNoiBo.trim(),
+          ten_san_pham: tenSanPham.trim() || null,
         }),
       })
       setMsg({ type: 'success', text: `Đã lưu Ánh xạ SKU (ID #${res.id}) vào bảng anh_xa_sku!` })
       setMaSkuNcc('')
       setMaSkuNoiBo('')
+      setTenSanPham('')
+      setSkuErrors({})
       await loadData()
     } catch (err) {
       setMsg({ type: 'error', text: err.message })
@@ -82,11 +104,7 @@ export default function SuppliersPage() {
     <section className="module-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">DANH MỤC ĐỐI TÁC & HÀNG HÓA</p>
           <h1>Quản lý Nhà cung cấp & Ánh xạ SKU</h1>
-          <p className="page-description">
-            Quản lý danh sách đối tác cung ứng và thiết lập quan hệ chuyển đổi mã SKU của Nhà cung cấp sang mã nội bộ trên PO.
-          </p>
         </div>
         <div className="heading-actions">
           <button className="button button-secondary" type="button" onClick={loadData}>↻ Làm mới</button>
@@ -104,7 +122,6 @@ export default function SuppliersPage() {
           <div className="panel-heading">
             <div>
               <h2>Danh mục Nhà cung cấp ({suppliers.length})</h2>
-              <p>Danh sách các đối tác cung ứng hàng hóa và dịch vụ</p>
             </div>
           </div>
           <div className="table-wrap" style={{ marginBottom: 22 }}>
@@ -133,7 +150,6 @@ export default function SuppliersPage() {
           <div className="panel-heading">
             <div>
               <h2>Bảng Ánh xạ Mã hàng SKU ({skuMappings.length})</h2>
-              <p>Dùng để tự động đối chiếu dòng hóa đơn với dòng PO khi đối soát</p>
             </div>
           </div>
           <div className="table-wrap">
@@ -166,18 +182,36 @@ export default function SuppliersPage() {
           <div className="panel-heading">
             <div>
               <h2>Thêm Nhà cung cấp mới</h2>
-              <p>Quyền hạn: Nhân viên mua hàng hoặc Quản trị hệ thống</p>
             </div>
           </div>
           {canCreateNcc ? (
-            <form onSubmit={handleAddSupplier} className="crud-form" style={{ marginBottom: 28 }}>
+            <form onSubmit={handleAddSupplier} className="crud-form" style={{ marginBottom: 28 }} noValidate>
               <div className="form-group">
                 <label>Tên pháp lý doanh nghiệp *</label>
-                <input value={ten} onChange={(e) => setTen(e.target.value)} placeholder="VD: Công ty TNHH Thiết Bị Sao Việt" required />
+                <input
+                  className={supplierErrors.ten ? 'input-error' : ''}
+                  value={ten}
+                  onChange={(e) => {
+                    setTen(e.target.value)
+                    setSupplierErrors((prev) => ({ ...prev, ten: undefined }))
+                  }}
+                  placeholder="VD: Công ty TNHH Thiết Bị Sao Việt"
+                />
+                {supplierErrors.ten && <span className="field-error">{supplierErrors.ten}</span>}
               </div>
               <div className="form-group">
                 <label>Mã số thuế (MST) *</label>
-                <input value={mst} onChange={(e) => setMst(e.target.value)} placeholder="VD: 0319876543" maxLength={14} required />
+                <input
+                  className={supplierErrors.mst ? 'input-error' : ''}
+                  value={mst}
+                  onChange={(e) => {
+                    setMst(e.target.value)
+                    setSupplierErrors((prev) => ({ ...prev, mst: undefined }))
+                  }}
+                  placeholder="VD: 0319876543"
+                  maxLength={14}
+                />
+                {supplierErrors.mst && <span className="field-error">{supplierErrors.mst}</span>}
               </div>
               <div className="form-group">
                 <label>Địa chỉ</label>
@@ -194,28 +228,57 @@ export default function SuppliersPage() {
           <div className="panel-heading">
             <div>
               <h2>Thêm Ánh xạ SKU (NCC ↔ Nội bộ)</h2>
-              <p>Quyền hạn: Nhân viên mua hàng hoặc Kế toán AP</p>
             </div>
           </div>
           {canMapSku ? (
-            <form onSubmit={handleAddMapping} className="crud-form">
+            <form onSubmit={handleAddMapping} className="crud-form" noValidate>
               <div className="form-group">
                 <label>Chọn Nhà cung cấp *</label>
-                <select value={nccId} onChange={(e) => setNccId(e.target.value)} required>
+                <select
+                  className={skuErrors.nccId ? 'input-error' : ''}
+                  value={nccId}
+                  onChange={(e) => {
+                    setNccId(e.target.value)
+                    setSkuErrors((prev) => ({ ...prev, nccId: undefined }))
+                  }}
+                >
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>{s.ten} ({s.mst})</option>
                   ))}
                 </select>
+                {skuErrors.nccId && <span className="field-error">{skuErrors.nccId}</span>}
               </div>
               <div className="form-row-2">
                 <div className="form-group">
                   <label>Mã SKU bên NCC *</label>
-                  <input value={maSkuNcc} onChange={(e) => setMaSkuNcc(e.target.value)} placeholder="VD: ABC-02" required />
+                  <input
+                    className={skuErrors.maSkuNcc ? 'input-error' : ''}
+                    value={maSkuNcc}
+                    onChange={(e) => {
+                      setMaSkuNcc(e.target.value)
+                      setSkuErrors((prev) => ({ ...prev, maSkuNcc: undefined }))
+                    }}
+                    placeholder="VD: ABC-02"
+                  />
+                  {skuErrors.maSkuNcc && <span className="field-error">{skuErrors.maSkuNcc}</span>}
                 </div>
                 <div className="form-group">
                   <label>Mã SKU nội bộ (PO) *</label>
-                  <input value={maSkuNoiBo} onChange={(e) => setMaSkuNoiBo(e.target.value)} placeholder="VD: SKU-02" required />
+                  <input
+                    className={skuErrors.maSkuNoiBo ? 'input-error' : ''}
+                    value={maSkuNoiBo}
+                    onChange={(e) => {
+                      setMaSkuNoiBo(e.target.value)
+                      setSkuErrors((prev) => ({ ...prev, maSkuNoiBo: undefined }))
+                    }}
+                    placeholder="VD: SKU-02"
+                  />
+                  {skuErrors.maSkuNoiBo && <span className="field-error">{skuErrors.maSkuNoiBo}</span>}
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Tên sản phẩm / hàng hóa</label>
+                <input value={tenSanPham} onChange={(e) => setTenSanPham(e.target.value)} placeholder="VD: Thiết bị 5G tiêu chuẩn" />
               </div>
               <button type="submit" className="button button-primary">Lưu Ánh xạ SKU</button>
             </form>

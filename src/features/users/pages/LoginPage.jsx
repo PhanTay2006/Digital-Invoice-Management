@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
+import { canAccessRoute, getDefaultRouteForRole } from '../../../constants/permissions'
 
 const DEMO_ACCOUNTS = [
   { username: 'tester', role: 'Toàn quyền Kiểm thử (All-in-One)' },
@@ -24,9 +25,14 @@ export default function LoginPage() {
   const [infoNotice, setInfoNotice] = useState(null)
   const [showDemoList, setShowDemoList] = useState(true)
 
+  function resolveLandingPath(role) {
+    const requested = location.state?.from?.pathname
+    if (requested && canAccessRoute(role, requested)) return requested
+    return getDefaultRouteForRole(role)
+  }
+
   if (user) {
-    const redirectTo = location.state?.from?.pathname || '/dashboard'
-    return <Navigate to={redirectTo} replace />
+    return <Navigate to={resolveLandingPath(user.vai_tro)} replace />
   }
 
   async function handleSubmit(e) {
@@ -44,8 +50,8 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      await login(username, matKhau, remember)
-      navigate('/dashboard', { replace: true })
+      const loggedUser = await login(username, matKhau, remember)
+      navigate(resolveLandingPath(loggedUser?.vai_tro), { replace: true })
     } catch (err) {
       setError(err.message || 'Sai thông tin đăng nhập hoặc máy chủ chưa sẵn sàng.')
     } finally {

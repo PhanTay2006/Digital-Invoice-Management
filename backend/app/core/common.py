@@ -3,7 +3,12 @@ import jwt
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import create_engine, text
 
-engine = create_engine(os.environ.get("DATABASE_URL", "postgresql+psycopg://app:app@localhost/doisoat"))
+engine = create_engine(
+    os.environ.get("DATABASE_URL", "postgresql+psycopg://app:app@localhost/doisoat"),
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+)
 SECRET = os.environ.get("JWT_SECRET", "dev")
 
 
