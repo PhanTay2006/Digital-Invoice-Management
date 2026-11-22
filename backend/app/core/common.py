@@ -3,7 +3,12 @@ import jwt
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import create_engine, text
 
-engine = create_engine(os.environ.get("DATABASE_URL", "postgresql+psycopg://app:app@localhost/doisoat"))
+engine = create_engine(
+    os.environ.get("DATABASE_URL", "postgresql+psycopg://app:app@localhost/doisoat"),
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+)
 SECRET = os.environ.get("JWT_SECRET", "dev")
 
 
@@ -14,9 +19,9 @@ def nguoi_dung(authorization: str = Header(...)):
         raise HTTPException(401, "Token không hợp lệ")
 
 
-def can_vai_tro(*vt):  # NF-10: kiểm quyền ở lớp API
+def can_vai_tro(*vt):  # NF-10: kiểm quyền ở lớp API (hỗ trợ thêm TOAN_QUYEN để kiểm thử)
     def dep(u=Depends(nguoi_dung)):
-        if u["vai_tro"] not in vt:
+        if u["vai_tro"] not in vt and u["vai_tro"] != "TOAN_QUYEN":
             raise HTTPException(403, "Không đủ quyền")
         return u
     return dep

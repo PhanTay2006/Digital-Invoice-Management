@@ -1,46 +1,83 @@
-import { useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
+import { apiFetch } from '../../services/api'
+import { canAccessRoute } from '../../constants/permissions'
 
 const pageNames = {
-  dashboard: 'Dashboard',
-  invoices: 'Invoices',
-  'purchase-orders': 'Purchase Orders',
-  'goods-receipts': 'Goods Receipts',
-  matching: 'Three-Way Matching',
-  exceptions: 'Exceptions',
-  suppliers: 'Suppliers',
-  reports: 'Reports & Analytics',
-  users: 'Users & Access',
+  dashboard: 'Tổng quan',
+  invoices: 'Quản lý Hóa đơn B2B',
+  'purchase-orders': 'Đơn đặt hàng (PO)',
+  'goods-receipts': 'Phiếu nhập kho (GRN)',
+  matching: 'Đối soát 3 chiều (3-Way Matching)',
+  exceptions: 'Tranh chấp & Duyệt ngoại lệ',
+  company: 'Thông tin công ty',
+  suppliers: 'Nhà cung cấp & Ánh xạ SKU',
+  reports: 'Báo cáo & Kết xuất dữ liệu',
+  users: 'Quản trị Hệ thống & Phân quyền',
 }
 
 export default function Topbar() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+  const [unread, setUnread] = useState(0)
+  const canViewExceptions = canAccessRoute(user?.vai_tro, '/exceptions')
+
   const current = location.pathname.split('/').filter(Boolean).at(-1) || 'dashboard'
-  const pageName = pageNames[current] || 'Dashboard'
+  const pageName = pageNames[current] || 'Tổng quan'
+
+  useEffect(() => {
+    apiFetch('/thong-bao?chua_doc=true')
+      .then((list) => setUnread(Array.isArray(list) ? list.length : 0))
+      .catch(() => {})
+  }, [location.pathname])
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <header className="topbar">
       <div className="breadcrumbs">
-        <span>Workspace</span>
+        <span>Hệ thống Đối soát Hóa đơn B2B</span>
         <span className="breadcrumb-separator">/</span>
         <strong>{pageName}</strong>
       </div>
+
       <div className="topbar-actions">
-        <label className="search-box">
-          <span aria-hidden="true">⌕</span>
-          <input type="search" placeholder="Search anything..." aria-label="Search" />
-          <kbd>⌘ K</kbd>
-        </label>
-        <button className="icon-button notification-button" type="button" aria-label="Notifications">
-          ♧<i />
-        </button>
-        <div className="topbar-divider" />
-        <button className="profile-button" type="button">
-          <div className="profile-avatar">PT</div>
-          <div className="profile-copy">
-            <strong>Phan Van Tay</strong>
-            <span>Administrator</span>
+        {canViewExceptions && (
+          <>
+            <button
+              className="icon-button notification-button"
+              type="button"
+              title={`Thông báo chưa đọc: ${unread}`}
+              onClick={() => navigate('/exceptions')}
+            >
+              🔔{unread > 0 && <span className="notif-count">{unread}</span>}
+            </button>
+            <div className="topbar-divider" />
+          </>
+        )}
+
+        <div className="profile-button">
+          <div className="profile-avatar">
+            {user?.ten_dang_nhap?.slice(0, 2).toUpperCase() || 'ND'}
           </div>
-          <span className="profile-chevron">⌄</span>
+          <div className="profile-copy">
+            <strong>{user?.ho_ten || 'Người dùng'}</strong>
+            <span>{user?.ten_vai_tro || `@${user?.ten_dang_nhap || 'user'}`}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="button button-secondary"
+          style={{ height: 32, padding: '0 12px' }}
+          onClick={handleLogout}
+        >
+          Đăng xuất
         </button>
       </div>
     </header>

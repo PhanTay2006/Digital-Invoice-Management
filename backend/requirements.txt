@@ -8,3 +8,9 @@ pytest
 pdfplumber
 python-multipart
 openpyxl
+pillow
+numpy
+pytesseract
+pypdfium2
+rapidocr-onnxruntime
+google-genai>=3.2.0

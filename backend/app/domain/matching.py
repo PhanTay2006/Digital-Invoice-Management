@@ -1,6 +1,7 @@
 """Lõi đối soát 3 chiều (F-07): hàm thuần, không phụ thuộc CSDL nên test được."""
 from dataclasses import dataclass
 from decimal import Decimal as D
+from .company import doi_chieu_cong_ty
 
 
 @dataclass
@@ -11,9 +12,11 @@ class Cau_hinh:
     han_muc_duyet: D
 
 
-def doi_soat(hd, dong_hd, po, dong_po, so_dat_luy_ke, cfg):
+def doi_soat(hd, dong_hd, po, dong_po, so_dat_luy_ke, cfg, cong_ty=None, phieu_kho_list=None):
     """hd/po: dict; dong_hd: list dict (dong_po_id, so_luong, don_gia, thanh_tien);
     dong_po: {id: {so_luong_dat, don_gia}}; so_dat_luy_ke: {dong_po_id: số đạt}.
+    cong_ty: optional dict hồ sơ pháp lý Công ty Bên mua để kiểm tra bước (f).
+    phieu_kho_list: optional list dict phiếu nhập kho liên kết PO để đối chiếu tên/MST đơn vị.
     Trả về dict: ket_qua, lech_lon, muc_lech_tien, chi_tiet_buoc."""
     buoc, lech_tien, lech_pct, partial = [], D(0), D(0), False
 
@@ -64,6 +67,47 @@ def doi_soat(hd, dong_hd, po, dong_po, so_dat_luy_ke, cfg):
             and hd["tong_thanh_toan"] == hd["tong_truoc_vat"] + hd["vat"] - hd["tien_coc_tru"]
             and hd["tien_coc_tru"] <= po["tien_coc"])
     them("e", e_ok, hd["tong_thanh_toan"], tong + hd["vat"] - hd["tien_coc_tru"], "Tổng tiền/VAT/cọc không khớp")
+
+    # (f) thông tin công ty mình trên hóa đơn (và phiếu nhập kho nếu có) khớp Hồ sơ Thông tin công ty
+    if cong_ty is not None:
+        kt_cty = doi_chieu_cong_ty(
+            hd.get("ten_nguoi_mua"),
+            hd.get("mst_nguoi_mua"),
+            cong_ty,
+            bat_buoc_ten=True,
+        )
+        grn_errors: list[str] = []
+        grn_notes: list[str] = []
+        if po.get("loai_po", "HANG_HOA") == "HANG_HOA":
+            for pk in phieu_kho_list or []:
+                ten_pk = pk.get("ten_don_vi")
+                mst_pk = pk.get("mst_don_vi")
+                if ten_pk or mst_pk:
+                    kt_pk = doi_chieu_cong_ty(ten_pk, mst_pk, cong_ty, bat_buoc_ten=False)
+                    if not kt_pk["dat"]:
+                        so_p = pk.get("so_phieu") or f"#{pk.get('id', '?')}"
+                        grn_errors.append(f"Phiếu kho {so_p}: {kt_pk['thong_bao']}")
+                        grn_notes.append(
+                            f"GRN {so_p}: {ten_pk or '—'}" + (f" (MST: {mst_pk})" if mst_pk else "")
+                        )
+
+        hd_display = " | ".join(
+            x for x in (
+                kt_cty.get("ten_tren_phieu"),
+                f"MST: {kt_cty['mst_tren_phieu']}" if kt_cty.get("mst_tren_phieu") else None,
+            ) if x
+        ) or "Chưa ghi trên hóa đơn"
+        if grn_notes:
+            hd_display = f"{hd_display} || {'; '.join(grn_notes)}"
+
+        reasons: list[str] = []
+        if not kt_cty["dat"]:
+            reasons.append(kt_cty["thong_bao"])
+        reasons.extend(grn_errors)
+
+        f_ok = bool(kt_cty["dat"] and not grn_errors)
+        gia_tri_tc = f"{kt_cty['ten_cong_ty']} | MST: {kt_cty['mst_cong_ty']}"
+        them("f", f_ok, hd_display, gia_tri_tc, "; ".join(reasons))
 
     dat_het = all(b["dat"] for b in buoc)
     ket_qua = "PARTIAL" if dat_het and partial else "MATCHED" if dat_het else "MISMATCH"

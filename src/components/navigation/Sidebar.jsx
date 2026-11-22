@@ -1,22 +1,25 @@
 import { NavLink } from 'react-router-dom'
+import logoImg from '../../assets/logo.png'
+import { useAuth } from '../../contexts/AuthContext'
+import { canAccessRoute } from '../../constants/permissions'
 
-const primaryLinks = [
-  { to: '/dashboard', label: 'Dashboard', icon: '▦' },
-]
 const workflowLinks = [
-  { to: '/invoices', label: 'Invoices', icon: '▤' },
-  { to: '/purchase-orders', label: 'Purchase Orders', icon: '▧' },
-  { to: '/goods-receipts', label: 'Goods Receipts', icon: '▣' },
-  { to: '/matching', label: 'Three-Way Matching', icon: '⇄' },
-  { to: '/exceptions', label: 'Exceptions', icon: '⚑', badge: '4' },
+  { to: '/invoices', label: 'Hóa đơn B2B', icon: '▤' },
+  { to: '/purchase-orders', label: 'Đơn đặt hàng (PO)', icon: '▧' },
+  { to: '/goods-receipts', label: 'Phiếu nhập kho (GRN)', icon: '▣' },
+  { to: '/matching', label: 'Đối soát 3 chiều', icon: '⇄' },
+  { to: '/exceptions', label: 'Tranh chấp & Ngoại lệ', icon: '⚑' },
 ]
+
 const managementLinks = [
-  { to: '/suppliers', label: 'Suppliers', icon: '♙' },
-  { to: '/reports', label: 'Reports & Analytics', icon: '▥' },
-  { to: '/users', label: 'Users & Access', icon: '♧' },
+  { to: '/suppliers', label: 'Nhà cung cấp & SKU', icon: '♙' },
+  { to: '/reports', label: 'Báo cáo & Thống kê', icon: '▥' },
+  { to: '/users', label: 'Quản trị & Phân quyền', icon: '♧' },
+  { to: '/company', label: 'Thông tin công ty', icon: '⌂' },
 ]
 
 function LinkGroup({ title, links }) {
+  if (!links.length) return null
   return (
     <div className="nav-group">
       <p className="nav-group-title">{title}</p>
@@ -32,40 +35,36 @@ function LinkGroup({ title, links }) {
 }
 
 export default function Sidebar() {
+  const { user } = useAuth()
+  const role = user?.vai_tro
+  const showDashboard = canAccessRoute(role, '/dashboard')
+  const visibleWorkflowLinks = workflowLinks.filter((l) => canAccessRoute(role, l.to))
+  const visibleManagementLinks = managementLinks.filter((l) => canAccessRoute(role, l.to))
+
   return (
     <aside className="sidebar">
+      {/* Brand với Logo và tên B2B Invoice cân đối */}
       <div className="brand">
-        <div className="brand-mark">L</div>
-        <div>
-          <div className="brand-name">LedgerFlow</div>
-          <div className="brand-caption">INVOICE OPERATIONS</div>
-        </div>
+        <img src={logoImg} alt="B2B Logo" className="brand-logo-img" />
+        <span className="brand-name">B2B Invoice</span>
       </div>
 
-      <div className="workspace-switcher">
-        <div className="workspace-avatar">AC</div>
-        <div className="workspace-copy">
-          <strong>Acme Corporation</strong>
-          <span>Workspace</span>
-        </div>
-        <span className="switcher-chevron">⌄</span>
-      </div>
+      <nav className="sidebar-nav" aria-label="Điều hướng chính">
+        {showDashboard && (
+          <div className="nav-group" style={{ marginBottom: 14 }}>
+            <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon" aria-hidden="true">▦</span>
+              <span>Tổng quan</span>
+            </NavLink>
+          </div>
+        )}
 
-      <nav className="sidebar-nav" aria-label="Main navigation">
-        <LinkGroup title="OVERVIEW" links={primaryLinks} />
-        <LinkGroup title="WORKFLOW" links={workflowLinks} />
-        <LinkGroup title="MANAGEMENT" links={managementLinks} />
+        <LinkGroup title="NGHIỆP VỤ ĐỐI SOÁT 3 CHIỀU" links={visibleWorkflowLinks} />
+        <LinkGroup title="DANH MỤC & QUẢN TRỊ" links={visibleManagementLinks} />
       </nav>
 
       <div className="sidebar-bottom">
-        <div className="help-card">
-          <div className="help-icon">?</div>
-          <div>
-            <strong>Need help?</strong>
-            <span>Visit our help center</span>
-          </div>
-        </div>
-        <div className="sidebar-version">VERSION 0.1.0</div>
+        <div className="sidebar-version">HỆ THỐNG ĐỐI SOÁT HÓA ĐƠN B2B — v1.0</div>
       </div>
     </aside>
   )
