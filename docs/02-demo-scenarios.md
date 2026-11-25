@@ -1,7 +1,8 @@
 # Kịch bản Trình diễn (Demo) & Đối chứng Bộ Mẫu Đúng / Sai
 
-**Môn học:** Công nghệ Phần mềm  
+**Môn học:** Công nghệ Phần mềm (ĐH Tôn Đức Thắng)  
 **Đề tài:** Hệ thống Quản lý Hóa đơn Điện tử & Đối soát 3 Chiều Tự động (`PO – GRN – Invoice`)  
+**Thành viên trình bày kiểm thử:** Phạm Văn Giàu (MSSV `52400184` — QA / Test Lead)  
 **Bộ dữ liệu đối chứng:** `qa/pdf-samples/` (**24 tệp PDF** chia thành 4 nhóm đúng/sai)
 
 ---
@@ -96,3 +97,13 @@ Vẫn ở tài khoản `ketoan`:
 ### Kịch bản 6: Tổng quan Dashboard, Xuất Báo cáo Excel & Audit Trail Bất biến
 1. Bằng `quanly`: Mở **Tổng quan** xem biểu đồ tức thời; mở **Báo cáo & Thống kê** → Bấm **`↓ Xuất file Excel (.xlsx)`**.
 2. Bằng `admin`: Mở **Quản trị & Phân quyền** → Xem **Audit Log** ghi nhận đầy đủ `INSERT / UPDATE / UPLOAD`, ẩn `mat_khau_bam`, và được bảo vệ bởi Trigger `tr_bao_ve_audit_log`.
+
+---
+
+## Phần 3: Gợi ý Trả lời Vấn đáp cho Vai trò Tester (M4)
+1. **Hỏi: Nhóm kiểm thử ở những mức độ nào?**  
+   *Trả lời:* Đủ 3 cấp độ chuẩn CNPM (Chương 6): (1) **Unit Test** bằng `pytest` (`backend/tests/test_01..test_05`) kiểm tra giá trị biên dung sai `2,00% / 2,01%`, chuẩn hóa tên công ty và trích xuất 24 file PDF; (2) **Integration Test** (`backend/tests/test_06_api_integration.py`) kiểm tra API + JWT/RBAC + 8 Trigger PL/pgSQL trong PostgreSQL 16; (3) **E2E Test** (`e2e/reconciliation-workflow.spec.js`) tự động hóa trình duyệt bằng Playwright qua 14 bước liên hoàn của 4 vai trò.
+2. **Hỏi: Vì sao trong bảng hàng hóa của PDF mẫu không ghi thêm các từ khóa như "phiếu nhập kho" vào hóa đơn?**  
+   *Trả lời:* Khi kiểm thử hộp trắng (`pdf_parser.py`), nhóm phát hiện hàm `nhan_dien_loai_chung_tu` ưu tiên kiểm tra cụm từ khóa GRN trước Hóa đơn, đồng thời `trich_hoa_don` & `trich_phieu_kho` phân dòng theo tọa độ Y của `pdfplumber`. Từ đó nhóm thiết kế chuẩn 24 mẫu chứng từ trong `qa/pdf-samples/` vừa đúng quy chuẩn kế toán (NĐ 123 & TT 200), vừa kiểm chứng chính xác ranh giới parser của hệ thống (bao gồm cả file `HD_SAI_08` cố tình nạp GRN vào mục Hóa đơn để chứng minh hệ thống cảnh báo đúng).
+3. **Hỏi: Trong quá trình test em phát hiện những lỗi (Defect) thực tế nào của hệ thống?**  
+   *Trả lời:* Nhóm ghi nhận trung thực **7 điểm sai lệch (`DEF-01` đến `DEF-07`)** trong báo cáo kiểm thử và Sheet `4_Bug_Defect_Log` (được kiểm chứng tự động tại `test_defects_01_to_07_tai_hien_thuc_nghiem` trong `test_06_api_integration.py`), tiêu biểu như: dữ liệu gốc `HD-0457` khi chưa bật cờ `--fix-seed-buyer` thiếu tên/MST bên mua (`DEF-01`), chưa khóa tạm thời đối soát lại khi đang chờ Quản lý duyệt ngoại lệ `CHO_DUYET` (`DEF-02`), chưa kiểm tra điều kiện `ngay_lap >= ngay_dat` (`DEF-03`), `POST /cau-hinh` trả 500 khi vi phạm CHECK hạn mức (`DEF-04`), PO chưa có GRN trả `MISMATCH` thay vì `PARTIAL` (`DEF-05`), thiếu endpoint `PUT/DELETE` cho hóa đơn/PO (`DEF-06`), và `export.py` chưa escape ký tự đầu chống Formula Injection (`DEF-07`).
