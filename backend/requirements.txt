@@ -5,6 +5,7 @@ psycopg[binary]
 pyjwt
 bcrypt
 pytest
+httpx
 pdfplumber
 python-multipart
 openpyxl

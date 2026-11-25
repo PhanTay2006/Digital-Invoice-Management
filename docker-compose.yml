@@ -44,6 +44,8 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./backend/app:/srv/app
+      - ./backend/tests:/srv/tests:ro
+      - ./qa:/srv/qa:ro
       - ./backend/uploads:/srv/uploads
 
 volumes:

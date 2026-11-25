@@ -592,7 +592,7 @@ export default function InvoicesPage() {
                       className={`status-pill ${kt.dat ? 'success' : 'danger'}`}
                       style={{ marginTop: 4, display: 'inline-block', fontSize: 11, padding: '2px 8px' }}
                     >
-                      {kt.dat ? '✓ Khớp Công ty mình' : '✕ Sai thông tin Công ty mình'}
+                      {kt.dat ? '✓ Khớp hồ sơ công ty' : '✕ Sai thông tin công ty'}
                     </span>
                   )}
                 </div>
@@ -854,7 +854,7 @@ export default function InvoicesPage() {
                             )}
                           </div>
                           <div className="extract-summary-item">
-                            <span>Đối chiếu Công ty mình:</span>
+                            <span>Đối chiếu thông tin công ty:</span>
                             {extractedData.kiem_tra_cong_ty?.trang_thai === 'KHOP' ? (
                               <span className="status-pill success">✓ Khớp {companyInfo.ten_cong_ty}</span>
                             ) : extractedData.kiem_tra_cong_ty?.trang_thai === 'KHONG_KHOP' ? (
@@ -1170,7 +1170,7 @@ export default function InvoicesPage() {
                     <div style={{ marginBottom: 12 }}>
                       <div className="form-row-2">
                         <div className="form-group">
-                          <label>Đơn vị mua hàng trên HĐ (Công ty mình)</label>
+                          <label>Đơn vị mua hàng trên HĐ</label>
                           <input
                             value={tenNguoiMua}
                             onChange={(e) => setTenNguoiMua(e.target.value)}
@@ -1220,7 +1220,7 @@ export default function InvoicesPage() {
                           }}
                         >
                           Chưa có <strong>Tên Đơn vị mua hàng trên HĐ</strong> — khi đối soát sẽ đối chiếu với{' '}
-                          <strong>{companyInfo.ten_cong_ty}</strong> và báo Không đạt nếu thiếu tên Công ty mình.
+                          <strong>{companyInfo.ten_cong_ty}</strong> và báo Không đạt nếu thiếu tên đơn vị mua hàng.
                         </div>
                       )}
                     </div>

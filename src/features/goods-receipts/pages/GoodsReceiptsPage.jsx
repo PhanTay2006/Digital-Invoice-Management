@@ -7,6 +7,7 @@ export default function GoodsReceiptsPage() {
   const { user } = useAuth()
   const [grns, setGrns] = useState([])
   const [pos, setPos] = useState([])
+  const [selectedGrn, setSelectedGrn] = useState(null)
   const [msg, setMsg] = useState(null)
 
   // Modal states
@@ -46,6 +47,15 @@ export default function GoodsReceiptsPage() {
   const canCreate = ['THU_KHO', 'TOAN_QUYEN'].includes(user?.vai_tro)
   const poMap = Object.fromEntries(pos.map((p) => [String(p.id), p]))
 
+  async function viewDetail(id) {
+    try {
+      const detail = await apiFetch(`/phieu-kho/${id}`)
+      setSelectedGrn(detail)
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    }
+  }
+
   async function loadData() {
     try {
       const [grnList, poList, cty] = await Promise.all([
@@ -59,6 +69,15 @@ export default function GoodsReceiptsPage() {
       setPos(hangHoaPos)
       if (hangHoaPos.length > 0 && !poId) {
         await handleSelectPo(hangHoaPos[0].id)
+      }
+      if (grnList.length > 0) {
+        const targetId =
+          selectedGrn && grnList.some((g) => g.id === selectedGrn.id)
+            ? selectedGrn.id
+            : grnList[0].id
+        await viewDetail(targetId)
+      } else {
+        setSelectedGrn(null)
       }
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -84,25 +103,27 @@ export default function GoodsReceiptsPage() {
           .map((l) => [String(l.ma_sku).toUpperCase(), l])
       )
 
-      setDongKho(
-        detail.dong.map((d) => {
-          const match =
-            extractedByLineId.get(Number(d.id)) ||
-            extractedBySku.get(String(d.ma_sku || '').toUpperCase())
-          return {
-            dong_po_id: d.id,
-            ma_sku: d.ma_sku,
-            ten_san_pham: d.mo_ta || `Sản phẩm ${d.ma_sku}`,
-            so_luong_dat: d.so_luong_dat,
-            so_nhan: match ? match.so_nhan : d.so_luong_dat,
-            so_dat: match ? match.so_dat : d.so_luong_dat,
-            so_tu_choi: match ? match.so_tu_choi : 0,
-            ly_do: match?.ly_do || '',
-          }
-        })
-      )
+      const mappedLines = detail.dong.map((d) => {
+        const match =
+          extractedByLineId.get(Number(d.id)) ||
+          extractedBySku.get(String(d.ma_sku || '').toUpperCase())
+        return {
+          dong_po_id: d.id,
+          ma_sku: d.ma_sku,
+          ten_san_pham: d.ten_san_pham || d.mo_ta || `Sản phẩm ${d.ma_sku}`,
+          so_luong_dat: Number(d.so_luong_dat || 0),
+          don_gia: Number(d.don_gia || 0),
+          so_nhan: match ? match.so_nhan : d.so_luong_dat,
+          so_dat: match ? match.so_dat : d.so_luong_dat,
+          so_tu_choi: match ? match.so_tu_choi : 0,
+          ly_do: match?.ly_do || '',
+        }
+      })
+      setDongKho(mappedLines)
+      return mappedLines
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
+      return []
     }
   }
 
@@ -206,11 +227,26 @@ export default function GoodsReceiptsPage() {
       setTenDonVi(res.ten_nguoi_mua || '')
       setMstDonVi(res.mst_nguoi_mua || '')
 
+      let enrichedLines = []
       if (res.po_id) {
-        await handleSelectPo(res.po_id, res.dong || [])
+        enrichedLines = await handleSelectPo(res.po_id, res.dong || [])
       } else if (poId && res.dong?.length) {
-        await handleSelectPo(poId, res.dong)
+        enrichedLines = await handleSelectPo(poId, res.dong)
       }
+
+      const skuPriceMap = new Map(
+        (enrichedLines || []).map((l) => [String(l.ma_sku || '').toUpperCase(), { ten_san_pham: l.ten_san_pham, don_gia: Number(l.don_gia || 0) }])
+      )
+      const displayLines = (res.dong || []).map((d) => {
+        const info = skuPriceMap.get(String(d.ma_sku || '').toUpperCase())
+        const donGia = info ? info.don_gia : Number(d.don_gia || 0)
+        return {
+          ...d,
+          ten_san_pham: d.ten_san_pham || info?.ten_san_pham || '',
+          don_gia: donGia,
+          thanh_tien: Number(d.so_dat || 0) * donGia,
+        }
+      })
 
       setExtractedData({
         so_phieu: res.so_phieu || null,
@@ -220,8 +256,8 @@ export default function GoodsReceiptsPage() {
         ten_nguoi_mua: res.ten_nguoi_mua || null,
         mst_nguoi_mua: res.mst_nguoi_mua || null,
         kiem_tra_cong_ty: res.kiem_tra_cong_ty || verifyCompanyBuyer(res.ten_nguoi_mua, res.mst_nguoi_mua, companyInfo),
-        so_dong: res.dong?.length || 0,
-        dong: res.dong || [],
+        so_dong: displayLines.length,
+        dong: displayLines,
         loai_file: res.loai_file,
         phuong_phap: res.phuong_phap,
         so_trang: res.so_trang,
@@ -277,7 +313,7 @@ export default function GoodsReceiptsPage() {
       })
       setMsg({
         type: 'success',
-        text: `Đã lập Phiếu nhập kho #${res.id} (Trạng thái: ${res.trang_thai}) vào bảng phieu_kho & dong_phieu_kho!`,
+        text: `Đã lập Phiếu nhập kho #${res.id} (Trạng thái: ${res.trang_thai === 'CONFIRMED' ? 'Đủ hàng' : 'Nhập một phần'}) thành công!`,
       })
       setSoPhieu('')
       setTenDonVi('')
@@ -290,11 +326,17 @@ export default function GoodsReceiptsPage() {
       setIsCreateModalOpen(false)
       setIsUploadModalOpen(false)
       await loadData()
+      await viewDetail(res.id)
     } catch (err) {
       setModalError(err.message)
       setMsg({ type: 'error', text: err.message })
     }
   }
+
+  const tongFormNhan = dongKho.reduce((s, d) => s + (Number(d.so_nhan) || 0), 0)
+  const tongFormDat = dongKho.reduce((s, d) => s + (Number(d.so_dat) || 0), 0)
+  const tongFormTuChoi = dongKho.reduce((s, d) => s + (Number(d.so_tu_choi) || 0), 0)
+  const tongFormGiaTri = dongKho.reduce((s, d) => s + (Number(d.so_dat) || 0) * (Number(d.don_gia) || 0), 0)
 
   return (
     <section className="module-page">
@@ -354,7 +396,8 @@ export default function GoodsReceiptsPage() {
         </div>
       )}
 
-      <div className="panel">
+      {/* BẢNG DANH SÁCH PHIẾU NHẬP KHO */}
+      <div className="panel" style={{ marginBottom: 20 }}>
         <div className="panel-heading">
           <div>
             <h2>Danh sách Phiếu nhập kho ({grns.length})</h2>
@@ -366,55 +409,353 @@ export default function GoodsReceiptsPage() {
               <tr>
                 <th>ID</th>
                 <th>SỐ PHIẾU GRN</th>
-                <th>SỐ PO THAM CHIẾU</th>
+                <th>PO THAM CHIẾU</th>
                 <th>NHÀ CUNG CẤP</th>
-                <th>SẢN PHẨM / MẶT HÀNG</th>
+                <th>ĐƠN VỊ NHẬP KHO</th>
+                <th>SẢN PHẨM</th>
+                <th>SỐ LƯỢNG</th>
+                <th>TỔNG GIÁ TRỊ ĐẠT (₫)</th>
                 <th>NGÀY NHẬP</th>
-                <th>CHỨNG TỪ</th>
                 <th>TRẠNG THÁI</th>
               </tr>
             </thead>
             <tbody>
               {grns.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '24px' }} className="muted-cell">
+                  <td colSpan="10" style={{ textAlign: 'center', padding: '24px' }} className="muted-cell">
                     Chưa có phiếu nhập kho nào.
                   </td>
                 </tr>
               ) : (
-                grns.map((g) => (
-                  <tr key={g.id}>
-                    <td>#{g.id}</td>
-                    <td><strong className="invoice-id">{g.so_phieu}</strong></td>
-                    <td>{g.so_po}</td>
-                    <td>{g.ten_ncc}</td>
-                    <td>
-                      {g.mat_hang ? (
-                        g.mat_hang.split(', ').map((item, idx) => (
-                          <div key={idx} style={{ fontWeight: 600, lineHeight: 1.4 }}>{item}</div>
-                        ))
-                      ) : '—'}
-                    </td>
-                    <td>{g.ngay_nhap}</td>
-                    <td>
-                      {g.file_pdf ? (
-                        <span className="status-pill info">PDF đính kèm</span>
-                      ) : (
-                        <span className="muted-cell">Nhập tay</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`status-pill ${g.trang_thai === 'CONFIRMED' ? 'success' : 'warning'}`}>
-                        {g.trang_thai === 'CONFIRMED' ? 'Đủ hàng' : 'Nhập một phần'}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                grns.map((g) => {
+                  const isSelected = selectedGrn?.id === g.id
+                  const ktCty = verifyCompanyBuyer(g.ten_don_vi, g.mst_don_vi, companyInfo)
+                  const rawItems = Array.isArray(g.dong_tom_tat) && g.dong_tom_tat.length > 0
+                    ? g.dong_tom_tat
+                    : Array.isArray(g.dong) && g.dong.length > 0
+                    ? g.dong
+                    : (g.mat_hang ? g.mat_hang.split(', ').map((name) => ({ ten_san_pham: name, so_dat: null, so_nhan: null })) : [])
+                  const slDat = Number(g.tong_so_dat ?? 0)
+                  const tongGia = Number(g.tong_gia_tri ?? 0)
+                  return (
+                    <tr
+                      key={g.id}
+                      onClick={() => viewDetail(g.id)}
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? '#f0f7ff' : undefined,
+                      }}
+                    >
+                      <td>#{g.id}</td>
+                      <td>
+                        <strong className="invoice-id">{g.so_phieu}</strong>
+                        {g.file_pdf && (
+                          <div>
+                            <span className="status-pill info" style={{ fontSize: 10.5, padding: '1px 6px', marginTop: 2 }}>
+                              PDF đính kèm
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td><strong>{g.so_po}</strong></td>
+                      <td>
+                        <strong>{g.ten_ncc}</strong>
+                        {g.mst_ncc && <small style={{ display: 'block', color: '#64748b' }}>MST: {g.mst_ncc}</small>}
+                      </td>
+                      <td>
+                        {g.ten_don_vi || g.mst_don_vi ? (
+                          <div>
+                            <strong style={{ display: 'block', lineHeight: 1.35 }}>{g.ten_don_vi || '—'}</strong>
+                            {g.mst_don_vi && (
+                              <small style={{ display: 'block', color: '#64748b' }}>MST: {g.mst_don_vi}</small>
+                            )}
+                            <span
+                              className={`status-pill ${ktCty.dat ? 'success' : 'danger'}`}
+                              style={{ marginTop: 3, display: 'inline-block', fontSize: 10.5, padding: '1px 7px' }}
+                            >
+                              {ktCty.dat ? '✓ Khớp hồ sơ' : '✕ Sai thông tin'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="muted-cell">Chưa ghi trên phiếu</span>
+                        )}
+                      </td>
+                      <td>
+                        {rawItems.length > 0 ? (
+                          <div>
+                            {rawItems.map((item, idx) => (
+                              <div key={idx} style={{ fontWeight: 600, lineHeight: 1.5 }}>
+                                {item.ten_san_pham || item.ma_sku}
+                                {item.ma_sku && item.ten_san_pham && item.ten_san_pham !== item.ma_sku && (
+                                  <span className="muted-cell" style={{ fontWeight: 400, fontSize: 11.5 }}> ({item.ma_sku})</span>
+                                )}
+                              </div>
+                            ))}
+                            {rawItems.length > 1 && (
+                              <small style={{ display: 'block', color: '#64748b', marginTop: 2 }}>
+                                Tổng: {rawItems.length} loại sản phẩm
+                              </small>
+                            )}
+                          </div>
+                        ) : (
+                          <span>—</span>
+                        )}
+                      </td>
+                      <td>
+                        {rawItems.length > 0 ? (
+                          <div>
+                            {rawItems.map((item, idx) => {
+                              const itemDat = item.so_dat != null ? Number(item.so_dat) : slDat
+                              const itemNhan = item.so_nhan != null ? Number(item.so_nhan) : null
+                              const hasDiff = itemNhan != null && itemNhan !== itemDat
+                              return (
+                                <div key={idx} style={{ lineHeight: 1.5, whiteSpace: 'nowrap' }}>
+                                  <strong>{itemDat.toLocaleString('vi-VN')}</strong>
+                                  {hasDiff && (
+                                    <span className="muted-cell" style={{ fontSize: 11.5 }}>
+                                      {' '}/ nhận {itemNhan.toLocaleString('vi-VN')}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            {rawItems.length > 1 && (
+                              <small style={{ display: 'block', color: '#475569', marginTop: 2, fontWeight: 600 }}>
+                                Tổng đạt: {slDat.toLocaleString('vi-VN')}
+                              </small>
+                            )}
+                          </div>
+                        ) : (
+                          <span>{slDat.toLocaleString('vi-VN')}</span>
+                        )}
+                      </td>
+                      <td className="amount-cell">
+                        {tongGia.toLocaleString('vi-VN')}
+                      </td>
+                      <td>{g.ngay_nhap}</td>
+                      <td>
+                        <span className={`status-pill ${g.trang_thai === 'CONFIRMED' ? 'success' : 'warning'}`}>
+                          {g.trang_thai === 'CONFIRMED' ? 'Đủ hàng' : 'Nhập một phần'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* CHI TIẾT PHIẾU NHẬP KHO ĐANG CHỌN (ĐỒNG BỘ VỚI TRANG HÓA ĐƠN) */}
+      {selectedGrn && (
+        <div className="panel">
+          <div className="panel-heading">
+            <div>
+              <h2>
+                Chi tiết Phiếu nhập kho: {selectedGrn.so_phieu} (#{selectedGrn.id})
+              </h2>
+            </div>
+            <div>
+              <span
+                className={`status-pill ${selectedGrn.trang_thai === 'CONFIRMED' ? 'success' : 'warning'}`}
+                style={{ fontSize: 13, padding: '5px 12px' }}
+              >
+                {selectedGrn.trang_thai === 'CONFIRMED' ? 'Đủ hàng' : 'Nhập một phần'}
+              </span>
+            </div>
+          </div>
+
+          {(() => {
+            const kt = verifyCompanyBuyer(selectedGrn.ten_don_vi, selectedGrn.mst_don_vi, companyInfo)
+            const lines = selectedGrn.dong || []
+            const soMatHang = Number(selectedGrn.so_mat_hang ?? lines.length)
+            const tongDatPo = lines.reduce((s, d) => s + Number(d.so_luong_dat || 0), 0)
+            const tongNhan = Number(
+              selectedGrn.tong_so_nhan ?? lines.reduce((s, d) => s + Number(d.so_nhan || 0), 0)
+            )
+            const tongDat = Number(
+              selectedGrn.tong_so_dat ?? lines.reduce((s, d) => s + Number(d.so_dat || 0), 0)
+            )
+            const tongTuChoi = Number(
+              selectedGrn.tong_so_tu_choi ?? lines.reduce((s, d) => s + Number(d.so_tu_choi || 0), 0)
+            )
+            const tongGiaTri = Number(
+              selectedGrn.tong_gia_tri ??
+                lines.reduce((s, d) => s + Number(d.so_dat || 0) * Number(d.don_gia || 0), 0)
+            )
+
+            return (
+              <>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: 14,
+                    marginBottom: 20,
+                    padding: 16,
+                    background: '#f8fafc',
+                    borderRadius: 0,
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Đơn vị nhập kho
+                    </span>
+                    <strong>{selectedGrn.ten_don_vi || 'Chưa ghi trên phiếu'}</strong>
+                    {selectedGrn.mst_don_vi && (
+                      <small style={{ display: 'block', color: '#64748b' }}>
+                        MST: {selectedGrn.mst_don_vi}
+                      </small>
+                    )}
+                    {(selectedGrn.ten_don_vi || selectedGrn.mst_don_vi) && (
+                      <span
+                        className={`status-pill ${kt.dat ? 'success' : 'danger'}`}
+                        style={{ marginTop: 4, display: 'inline-block', fontSize: 11, padding: '2px 8px' }}
+                      >
+                        {kt.dat ? '✓ Khớp hồ sơ công ty' : '✕ Sai thông tin công ty'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Nhà cung cấp giao hàng
+                    </span>
+                    <strong>{selectedGrn.ten_ncc || '—'}</strong>
+                    {selectedGrn.mst_ncc && (
+                      <small style={{ display: 'block', color: '#64748b' }}>
+                        MST: {selectedGrn.mst_ncc}
+                      </small>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Đơn đặt hàng (PO) tham chiếu
+                    </span>
+                    <strong>{selectedGrn.so_po}</strong>
+                    {selectedGrn.tong_tien_po != null && (
+                      <small style={{ display: 'block', color: '#64748b' }}>
+                        Giá trị PO: {Number(selectedGrn.tong_tien_po).toLocaleString('vi-VN')} ₫
+                      </small>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Ngày nhập kho
+                    </span>
+                    <strong>{selectedGrn.ngay_nhap}</strong>
+                    <small style={{ display: 'block', color: '#64748b' }}>
+                      Nguồn: {selectedGrn.file_pdf ? 'Tải file chứng từ' : 'Nhập thủ công'}
+                    </small>
+                  </div>
+
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Tổng sản phẩm nhập
+                    </span>
+                    <strong>{soMatHang} mặt hàng</strong>
+                    <small style={{ display: 'block', color: '#64748b' }}>
+                      Đặt trên PO: {tongDatPo.toLocaleString('vi-VN')} đơn vị
+                    </small>
+                  </div>
+
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Tổng số lượng hàng hóa
+                    </span>
+                    <strong>
+                      Đạt: {tongDat.toLocaleString('vi-VN')} / Nhận: {tongNhan.toLocaleString('vi-VN')}
+                    </strong>
+                    <small style={{ display: 'block', color: tongTuChoi > 0 ? '#b91c1c' : '#64748b' }}>
+                      Từ chối / lỗi: {tongTuChoi.toLocaleString('vi-VN')}
+                    </small>
+                  </div>
+
+                  <div>
+                    <span className="muted-cell" style={{ display: 'block', marginBottom: 2 }}>
+                      Tổng giá trị nhập kho (Đạt)
+                    </span>
+                    <strong style={{ color: '#0f172a', fontSize: 16 }}>
+                      {tongGiaTri.toLocaleString('vi-VN')} ₫
+                    </strong>
+                    <small style={{ display: 'block', color: '#64748b' }}>
+                      Tính theo SL đạt × Đơn giá PO
+                    </small>
+                  </div>
+                </div>
+
+                <h3>Danh sách Dòng mặt hàng trên Phiếu nhập kho</h3>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>STT</th>
+                        <th>SẢN PHẨM / MẶT HÀNG</th>
+                        <th>SL ĐẶT PO</th>
+                        <th>SL THỰC NHẬN</th>
+                        <th>SL ĐẠT</th>
+                        <th>SL TỪ CHỐI</th>
+                        <th>ĐƠN GIÁ PO (₫)</th>
+                        <th>THÀNH TIỀN ĐẠT (₫)</th>
+                        <th>LÝ DO / GHI CHÚ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((d, idx) => {
+                        const donGia = Number(d.don_gia || 0)
+                        const thanhTien =
+                          d.thanh_tien != null
+                            ? Number(d.thanh_tien)
+                            : Number(d.so_dat || 0) * donGia
+                        return (
+                          <tr key={d.id || idx}>
+                            <td>#{idx + 1}</td>
+                            <td>
+                              <strong style={{ display: 'block' }}>
+                                {d.ten_san_pham || `Sản phẩm ${d.ma_sku}`}
+                              </strong>
+                              <span className="muted-cell" style={{ fontSize: 12 }}>
+                                Mã SKU: <strong className="invoice-id">{d.ma_sku}</strong>
+                              </span>
+                            </td>
+                            <td>{Number(d.so_luong_dat || 0).toLocaleString('vi-VN')}</td>
+                            <td>{Number(d.so_nhan || 0).toLocaleString('vi-VN')}</td>
+                            <td><strong>{Number(d.so_dat || 0).toLocaleString('vi-VN')}</strong></td>
+                            <td style={{ color: Number(d.so_tu_choi || 0) > 0 ? '#b91c1c' : undefined }}>
+                              {Number(d.so_tu_choi || 0).toLocaleString('vi-VN')}
+                            </td>
+                            <td className="amount-cell">{donGia.toLocaleString('vi-VN')}</td>
+                            <td className="amount-cell">{thanhTien.toLocaleString('vi-VN')}</td>
+                            <td>{d.ly_do || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
+                        <td colSpan="2">TỔNG CỘNG ({soMatHang} sản phẩm)</td>
+                        <td>{tongDatPo.toLocaleString('vi-VN')}</td>
+                        <td>{tongNhan.toLocaleString('vi-VN')}</td>
+                        <td>{tongDat.toLocaleString('vi-VN')}</td>
+                        <td>{tongTuChoi.toLocaleString('vi-VN')}</td>
+                        <td>—</td>
+                        <td className="amount-cell" style={{ color: '#2563eb' }}>
+                          {tongGiaTri.toLocaleString('vi-VN')} ₫
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      )}
 
       {/* POPUP 1: TẢI PHIẾU NHẬP KHO LÊN */}
       {isUploadModalOpen && (
@@ -521,124 +862,176 @@ export default function GoodsReceiptsPage() {
                     </div>
                   )}
 
-                  {!isUploading && extractedData && (
-                    <div className="extract-summary-card">
-                      <div className="extract-summary-title">✓ Dữ liệu trích xuất tự động</div>
-                      <div className="extract-summary-list">
-                        <div className="extract-summary-item">
-                          <span>Số phiếu kho:</span>
-                          {extractedData.so_phieu ? (
-                            <strong>{extractedData.so_phieu}</strong>
-                          ) : (
-                            <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
-                          )}
-                        </div>
-                        <div className="extract-summary-item">
-                          <span>Ngày nhập:</span>
-                          {extractedData.ngay_nhap ? (
-                            <strong>{extractedData.ngay_nhap}</strong>
-                          ) : (
-                            <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
-                          )}
-                        </div>
-                        <div className="extract-summary-item">
-                          <span>PO tham chiếu:</span>
-                          {(extractedData.so_po || (extractedData.po_id ? poMap[extractedData.po_id]?.so_po : null)) ? (
-                            <strong>{extractedData.so_po || poMap[extractedData.po_id]?.so_po}</strong>
-                          ) : (
-                            <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
-                          )}
-                        </div>
-                        <div className="extract-summary-item">
-                          <span>Đơn vị lập phiếu:</span>
-                          {extractedData.ten_nguoi_mua || extractedData.mst_nguoi_mua ? (
-                            <strong>
-                              {extractedData.ten_nguoi_mua || '—'}
-                              {extractedData.mst_nguoi_mua ? ` (MST: ${extractedData.mst_nguoi_mua})` : ''}
-                            </strong>
-                          ) : (
-                            <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
-                          )}
-                        </div>
-                        {extractedData.kiem_tra_cong_ty && extractedData.kiem_tra_cong_ty.trang_thai !== 'CHUA_NHAN_DIEN' && (
+                  {!isUploading && extractedData && (() => {
+                    const tongSlNhan = (extractedData.dong || []).reduce((s, d) => s + Number(d.so_nhan || 0), 0)
+                    const tongSlDat = (extractedData.dong || []).reduce((s, d) => s + Number(d.so_dat || 0), 0)
+                    const tongGiaTriTrichXuat = (extractedData.dong || []).reduce(
+                      (s, d) => s + Number(d.so_dat || 0) * Number(d.don_gia || 0),
+                      0
+                    )
+                    return (
+                      <div className="extract-summary-card">
+                        <div className="extract-summary-title">✓ Dữ liệu trích xuất tự động</div>
+                        <div className="extract-summary-list">
                           <div className="extract-summary-item">
-                            <span>Đối chiếu Công ty mình:</span>
-                            <span className={`status-pill ${extractedData.kiem_tra_cong_ty.dat ? 'success' : 'danger'}`}>
-                              {extractedData.kiem_tra_cong_ty.dat ? '✓ Khớp hồ sơ công ty' : '✕ Sai thông tin công ty'}
-                            </span>
+                            <span>Số phiếu kho:</span>
+                            {extractedData.so_phieu ? (
+                              <strong>{extractedData.so_phieu}</strong>
+                            ) : (
+                              <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
+                            )}
+                          </div>
+                          <div className="extract-summary-item">
+                            <span>Ngày nhập:</span>
+                            {extractedData.ngay_nhap ? (
+                              <strong>{extractedData.ngay_nhap}</strong>
+                            ) : (
+                              <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
+                            )}
+                          </div>
+                          <div className="extract-summary-item">
+                            <span>PO tham chiếu:</span>
+                            {(extractedData.so_po || (extractedData.po_id ? poMap[extractedData.po_id]?.so_po : null)) ? (
+                              <strong>{extractedData.so_po || poMap[extractedData.po_id]?.so_po}</strong>
+                            ) : (
+                              <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
+                            )}
+                          </div>
+                          <div className="extract-summary-item">
+                            <span>Đơn vị nhập kho (trên phiếu):</span>
+                            {extractedData.ten_nguoi_mua || extractedData.mst_nguoi_mua ? (
+                              <strong>
+                                {extractedData.ten_nguoi_mua || '—'}
+                                {extractedData.mst_nguoi_mua ? ` (MST: ${extractedData.mst_nguoi_mua})` : ''}
+                              </strong>
+                            ) : (
+                              <strong style={{ color: '#94a3b8' }}>Chưa nhận diện</strong>
+                            )}
+                          </div>
+                          <div className="extract-summary-item">
+                            <span>Đối chiếu thông tin công ty:</span>
+                            {extractedData.kiem_tra_cong_ty?.trang_thai === 'KHOP' ? (
+                              <span className="status-pill success">✓ Khớp {companyInfo.ten_cong_ty}</span>
+                            ) : extractedData.kiem_tra_cong_ty?.trang_thai === 'KHONG_KHOP' ? (
+                              <span className="status-pill danger">✕ Sai thông tin công ty</span>
+                            ) : (
+                              <strong style={{ color: '#94a3b8' }}>Chưa nhận diện đơn vị trên phiếu</strong>
+                            )}
+                          </div>
+                          <div className="extract-summary-item">
+                            <span>Loại sản phẩm đã nhập:</span>
+                            <strong>{extractedData.so_dong} loại sản phẩm</strong>
+                          </div>
+                          <div className="extract-summary-item">
+                            <span>Tổng số lượng:</span>
+                            <strong>
+                              Đạt {tongSlDat.toLocaleString('vi-VN')} / Nhận {tongSlNhan.toLocaleString('vi-VN')}
+                            </strong>
+                          </div>
+                          {tongGiaTriTrichXuat > 0 && (
+                            <div className="extract-summary-item">
+                              <span>Tổng giá trị nhập đạt (theo PO):</span>
+                              <strong style={{ color: '#2563eb' }}>
+                                {tongGiaTriTrichXuat.toLocaleString('vi-VN')} ₫
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+
+                        {extractedData.dong?.length > 0 && (
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                              Dòng hàng nhận diện ({extractedData.dong.length})
+                            </div>
+                            <div className="table-wrap">
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>SKU / Sản phẩm</th>
+                                    <th>Nhận</th>
+                                    <th>Đạt</th>
+                                    <th>Từ chối</th>
+                                    <th>Thành tiền đạt (₫)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {extractedData.dong.map((d, idx) => (
+                                    <tr key={idx}>
+                                      <td>
+                                        <strong className="invoice-id" style={{ display: 'block' }}>{d.ma_sku}</strong>
+                                        {d.ten_san_pham && (
+                                          <span className="muted-cell" style={{ fontSize: 12 }}>{d.ten_san_pham}</span>
+                                        )}
+                                      </td>
+                                      <td>{Number(d.so_nhan).toLocaleString('vi-VN')}</td>
+                                      <td><strong>{Number(d.so_dat).toLocaleString('vi-VN')}</strong></td>
+                                      <td>{Number(d.so_tu_choi || 0).toLocaleString('vi-VN')}</td>
+                                      <td className="amount-cell">
+                                        {d.don_gia > 0 ? (Number(d.so_dat || 0) * Number(d.don_gia)).toLocaleString('vi-VN') : '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         )}
-                        <div className="extract-summary-item">
-                          <span>Số dòng trích xuất:</span>
-                          <strong>{extractedData.so_dong} mặt hàng</strong>
-                        </div>
-                      </div>
 
-                      {extractedData.dong?.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                            Dòng hàng nhận diện ({extractedData.dong.length})
-                          </div>
-                          <div className="table-wrap">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>SKU</th>
-                                  <th>Nhận</th>
-                                  <th>Đạt</th>
-                                  <th>Từ chối</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {extractedData.dong.map((d, idx) => (
-                                  <tr key={idx}>
-                                    <td><strong className="invoice-id">{d.ma_sku}</strong></td>
-                                    <td>{Number(d.so_nhan).toLocaleString('vi-VN')}</td>
-                                    <td>{Number(d.so_dat).toLocaleString('vi-VN')}</td>
-                                    <td>{Number(d.so_tu_choi || 0).toLocaleString('vi-VN')}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-
-                      {extractedData.canh_bao?.length > 0 && (
-                        <div style={{ marginTop: 12, fontSize: 13, color: '#b45309' }}>
-                          <strong>Lưu ý khi trích xuất:</strong>
-                          <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
-                            {extractedData.canh_bao.map((w, idx) => (
-                              <li key={idx}>{w}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {extractedData.van_ban_trich_xuat && (
-                        <details style={{ marginTop: 12 }}>
-                          <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: '#475569' }}>
-                            Xem văn bản OCR / PDF đọc được
-                          </summary>
-                          <pre
+                        {extractedData.kiem_tra_cong_ty?.trang_thai === 'KHONG_KHOP' && (
+                          <div
                             style={{
-                              margin: '8px 0 0',
-                              padding: 10,
+                              marginTop: 10,
+                              padding: '8px 10px',
                               borderRadius: 0,
-                              background: '#ffffff',
-                              border: '1px solid #e2e8f0',
-                              fontSize: 11.5,
-                              whiteSpace: 'pre-wrap',
-                              maxHeight: 180,
-                              overflowY: 'auto',
+                              background: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              fontSize: 12.5,
+                              color: '#b91c1c',
                             }}
                           >
-                            {extractedData.van_ban_trich_xuat}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  )}
+                            <strong>Cảnh báo sai Đơn vị nhập kho:</strong> {extractedData.kiem_tra_cong_ty.thong_bao}
+                            <div style={{ marginTop: 2, color: '#7f1d1d' }}>
+                              Chuẩn hồ sơ: <strong>{companyInfo.ten_cong_ty}</strong> (MST: <strong>{companyInfo.mst}</strong>)
+                            </div>
+                          </div>
+                        )}
+
+                        {extractedData.canh_bao?.length > 0 && (
+                          <div style={{ marginTop: 12, fontSize: 13, color: '#b45309' }}>
+                            <strong>Lưu ý khi trích xuất:</strong>
+                            <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                              {extractedData.canh_bao.map((w, idx) => (
+                                <li key={idx}>{w}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {extractedData.van_ban_trich_xuat && (
+                          <details style={{ marginTop: 12 }}>
+                            <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: '#475569' }}>
+                              Xem văn bản OCR / PDF đọc được
+                            </summary>
+                            <pre
+                              style={{
+                                margin: '8px 0 0',
+                                padding: 10,
+                                borderRadius: 0,
+                                background: '#ffffff',
+                                border: '1px solid #e2e8f0',
+                                fontSize: 11.5,
+                                whiteSpace: 'pre-wrap',
+                                maxHeight: 180,
+                                overflowY: 'auto',
+                              }}
+                            >
+                              {extractedData.van_ban_trich_xuat}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             </div>
@@ -758,7 +1151,7 @@ export default function GoodsReceiptsPage() {
                   >
                     {pos.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.so_po} — {p.ten_ncc} ({p.trang_thai})
+                        {p.so_po} — {p.ten_ncc} (Giá trị PO: {Number(p.tong_tien || 0).toLocaleString('vi-VN')} ₫ • {p.trang_thai})
                       </option>
                     ))}
                   </select>
@@ -772,7 +1165,7 @@ export default function GoodsReceiptsPage() {
                     <div style={{ marginBottom: 12 }}>
                       <div className="form-row-2">
                         <div className="form-group">
-                          <label>Đơn vị lập phiếu (Công ty mình)</label>
+                          <label>Đơn vị nhập kho</label>
                           <input
                             value={tenDonVi}
                             onChange={(e) => setTenDonVi(e.target.value)}
@@ -780,7 +1173,7 @@ export default function GoodsReceiptsPage() {
                           />
                         </div>
                         <div className="form-group">
-                          <label>MST đơn vị lập phiếu</label>
+                          <label>MST đơn vị nhập kho</label>
                           <input
                             className={formErrors.mstDonVi ? 'input-error' : ''}
                             value={mstDonVi}
@@ -793,6 +1186,21 @@ export default function GoodsReceiptsPage() {
                           {formErrors.mstDonVi && <span className="field-error">{formErrors.mstDonVi}</span>}
                         </div>
                       </div>
+                      {hasGrnCompanyInput && liveGrnCompanyCheck.trang_thai === 'KHOP' && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            padding: '6px 10px',
+                            borderRadius: 0,
+                            background: '#f0fdf4',
+                            border: '1px solid #bbf7d0',
+                            fontSize: 12,
+                            color: '#15803d',
+                          }}
+                        >
+                          ✓ Khớp hồ sơ công ty: <strong>{companyInfo.ten_cong_ty}</strong> (MST: <strong>{companyInfo.mst}</strong>)
+                        </div>
+                      )}
                       {hasGrnCompanyInput && liveGrnCompanyCheck.trang_thai === 'KHONG_KHOP' && (
                         <div
                           style={{
@@ -806,7 +1214,42 @@ export default function GoodsReceiptsPage() {
                           }}
                         >
                           <strong>⚠ {liveGrnCompanyCheck.thong_bao}</strong> — Hồ sơ hiện tại:{' '}
-                          <strong>{companyInfo.ten_cong_ty}</strong> (MST: <strong>{companyInfo.mst}</strong>).
+                          <strong>{companyInfo.ten_cong_ty}</strong> (MST: <strong>{companyInfo.mst}</strong>). Khi chạy đối soát bước kiểm tra đơn vị nhập kho sẽ báo Lệch.
+                        </div>
+                      )}
+                      {!(tenDonVi || '').trim() && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            padding: '8px 10px',
+                            borderRadius: 0,
+                            background: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            fontSize: 12,
+                            color: '#92400e',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 10,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span>
+                            Chưa điền <strong>Đơn vị nhập kho</strong> — chuẩn đối soát hiện tại là{' '}
+                            <strong>{companyInfo.ten_cong_ty}</strong> ({companyInfo.mst}).
+                          </span>
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            style={{ height: 28, padding: '0 10px', fontSize: 12 }}
+                            onClick={() => {
+                              setTenDonVi(companyInfo.ten_cong_ty || '')
+                              setMstDonVi(companyInfo.mst || '')
+                              clearError('mstDonVi')
+                            }}
+                          >
+                            + Điền thông tin công ty
+                          </button>
                         </div>
                       )}
                     </div>
@@ -814,69 +1257,146 @@ export default function GoodsReceiptsPage() {
                 })()}
                 {formErrors.dongKho && <span className="field-error" style={{ marginBottom: 8 }}>{formErrors.dongKho}</span>}
 
-                {dongKho.map((d, idx) => (
-                  <div key={d.dong_po_id} className="grn-line-card">
-                    <div className="grn-line-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div>
-                        <strong style={{ fontSize: 14, color: '#0f172a' }}>{d.ten_san_pham || d.ma_sku}</strong>
-                        <span className="muted-cell" style={{ display: 'block', fontSize: 12 }}>Mã SKU: {d.ma_sku}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 14 }}>
+                    Chi tiết Mặt hàng nhập kho ({dongKho.length} sản phẩm)
+                  </h3>
+                </div>
+
+                {dongKho.map((d, idx) => {
+                  const donGia = Number(d.don_gia || 0)
+                  const thanhTienDong = (Number(d.so_dat) || 0) * donGia
+                  return (
+                    <div key={d.dong_po_id} className="grn-line-card">
+                      <div
+                        className="grn-line-header"
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 12,
+                          flexWrap: 'wrap',
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div>
+                          <strong style={{ fontSize: 14, color: '#0f172a' }}>{d.ten_san_pham || d.ma_sku}</strong>
+                          <span className="muted-cell" style={{ display: 'block', fontSize: 12 }}>
+                            Mã SKU: <strong>{d.ma_sku}</strong> • Đơn giá PO: <strong>{donGia.toLocaleString('vi-VN')} ₫</strong>
+                          </span>
+                        </div>
+                        <div style={{ textAlign: 'right', fontSize: 13 }}>
+                          <div>
+                            Số lượng đặt trên PO: <b>{Number(d.so_luong_dat || 0).toLocaleString('vi-VN')}</b>
+                          </div>
+                          <div style={{ color: '#2563eb', fontWeight: 700 }}>
+                            Thành tiền đạt: {thanhTienDong.toLocaleString('vi-VN')} ₫
+                          </div>
+                        </div>
                       </div>
-                      <span>Số lượng đặt trên PO: <b>{d.so_luong_dat}</b></span>
+                      <div className="form-row-3">
+                        <div className="form-group">
+                          <label>Số thực nhận</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            className={formErrors[`dong_${idx}_so_nhan`] ? 'input-error' : ''}
+                            value={d.so_nhan}
+                            onChange={(e) => updateLine(idx, 'so_nhan', e.target.value)}
+                          />
+                          {formErrors[`dong_${idx}_so_nhan`] && (
+                            <span className="field-error">{formErrors[`dong_${idx}_so_nhan`]}</span>
+                          )}
+                        </div>
+                        <div className="form-group">
+                          <label>Số lượng đạt *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            className={formErrors[`dong_${idx}_so_dat`] ? 'input-error' : ''}
+                            value={d.so_dat}
+                            onChange={(e) => updateLine(idx, 'so_dat', e.target.value)}
+                          />
+                          {formErrors[`dong_${idx}_so_dat`] && (
+                            <span className="field-error">{formErrors[`dong_${idx}_so_dat`]}</span>
+                          )}
+                        </div>
+                        <div className="form-group">
+                          <label>Số từ chối</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            className={formErrors[`dong_${idx}_so_tu_choi`] ? 'input-error' : ''}
+                            value={d.so_tu_choi}
+                            onChange={(e) => updateLine(idx, 'so_tu_choi', e.target.value)}
+                          />
+                          {formErrors[`dong_${idx}_so_tu_choi`] && (
+                            <span className="field-error">{formErrors[`dong_${idx}_so_tu_choi`]}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Lý do chênh lệch / từ chối (nếu có)</label>
+                        <input
+                          value={d.ly_do}
+                          onChange={(e) => updateLine(idx, 'ly_do', e.target.value)}
+                          placeholder="VD: Hư hỏng bao bì khi vận chuyển"
+                        />
+                      </div>
                     </div>
-                    <div className="form-row-3">
-                      <div className="form-group">
-                        <label>Số thực nhận</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          className={formErrors[`dong_${idx}_so_nhan`] ? 'input-error' : ''}
-                          value={d.so_nhan}
-                          onChange={(e) => updateLine(idx, 'so_nhan', e.target.value)}
-                        />
-                        {formErrors[`dong_${idx}_so_nhan`] && (
-                          <span className="field-error">{formErrors[`dong_${idx}_so_nhan`]}</span>
-                        )}
-                      </div>
-                      <div className="form-group">
-                        <label>Số lượng đạt *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          className={formErrors[`dong_${idx}_so_dat`] ? 'input-error' : ''}
-                          value={d.so_dat}
-                          onChange={(e) => updateLine(idx, 'so_dat', e.target.value)}
-                        />
-                        {formErrors[`dong_${idx}_so_dat`] && (
-                          <span className="field-error">{formErrors[`dong_${idx}_so_dat`]}</span>
-                        )}
-                      </div>
-                      <div className="form-group">
-                        <label>Số từ chối</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          className={formErrors[`dong_${idx}_so_tu_choi`] ? 'input-error' : ''}
-                          value={d.so_tu_choi}
-                          onChange={(e) => updateLine(idx, 'so_tu_choi', e.target.value)}
-                        />
-                        {formErrors[`dong_${idx}_so_tu_choi`] && (
-                          <span className="field-error">{formErrors[`dong_${idx}_so_tu_choi`]}</span>
-                        )}
-                      </div>
+                  )
+                })}
+
+                {/* TỔNG HỢP SỐ LƯỢNG, TỔNG SẢN PHẨM & TỔNG GIÁ TRỊ NHẬP KHO */}
+                <div
+                  className="total-preview"
+                  style={{
+                    marginTop: 14,
+                    padding: 12,
+                    background: '#f8fafc',
+                    borderRadius: 0,
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ fontSize: 13, lineHeight: 1.6, flex: 1, minWidth: 260 }}>
+                    <div>
+                      Loại sản phẩm đã nhập: <strong>{dongKho.length} loại</strong>
                     </div>
-                    <div className="form-group">
-                      <label>Lý do chênh lệch / từ chối (nếu có)</label>
-                      <input
-                        value={d.ly_do}
-                        onChange={(e) => updateLine(idx, 'ly_do', e.target.value)}
-                        placeholder="VD: Hư hỏng bao bì khi vận chuyển"
-                      />
+                    {dongKho.length > 0 && (
+                      <div style={{ margin: '4px 0', paddingLeft: 10, borderLeft: '2px solid #cbd5e1' }}>
+                        {dongKho.map((d, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', maxWidth: 420, gap: 12 }}>
+                            <span>{d.ten_san_pham || d.ma_sku}</span>
+                            <strong>SL đạt: {(Number(d.so_dat) || 0).toLocaleString('vi-VN')}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div>
+                      Tổng số lượng: Thực nhận <strong>{tongFormNhan.toLocaleString('vi-VN')}</strong> • Đạt{' '}
+                      <strong style={{ color: '#15803d' }}>{tongFormDat.toLocaleString('vi-VN')}</strong> • Từ chối{' '}
+                      <strong style={{ color: tongFormTuChoi > 0 ? '#b91c1c' : undefined }}>
+                        {tongFormTuChoi.toLocaleString('vi-VN')}
+                      </strong>
                     </div>
                   </div>
-                ))}
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ display: 'block', fontSize: 12, color: '#64748b' }}>
+                      Tổng giá trị nhập kho (tính theo SL đạt):
+                    </span>
+                    <strong style={{ fontSize: 18, color: '#2563eb' }}>
+                      {tongFormGiaTri.toLocaleString('vi-VN')} ₫
+                    </strong>
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
                 <button
