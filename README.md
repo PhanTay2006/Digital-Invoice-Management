@@ -10,11 +10,11 @@
 1. [Giới thiệu & Tính năng chính](#1-giới-thiệu--tính-năng-chính)
 2. [Kiến trúc hệ thống: Client–Server (3-Tier) vs. MVC](#2-kiến-trúc-hệ-thống-clientserver-3-tier-vs-mvc)
 3. [Công nghệ sử dụng (Tech Stack)](#3-công-nghệ-sử-dụng-tech-stack)
-4. [Cấu trúc thư mục dự án](#4-cấu-trúc-thư-mục-dự-án)
+4. [Cấu trúc thư mục dự án chuẩn Công nghệ Phần mềm](#4-cấu-trúc-thư-mục-dự-án-chuẩn-công-nghệ-phần-mềm)
 5. [Phân quyền (RBAC) & Tài khoản kiểm thử](#5-phân-quyền-rbac--tài-khoản-kiểm-thử)
 6. [Hướng dẫn cài đặt & Khởi chạy chương trình](#6-hướng-dẫn-cài-đặt--khởi-chạy-chương-trình)
 7. [Tổng quan RESTful API chính](#7-tổng-quan-restful-api-chính)
-8. [Kiểm thử, Kiểm tra CSDL & Bảo trì](#8-kiểm-thử-kiểm-tra-csdl--bảo-trì)
+8. [Kiểm thử 3 cấp độ (Unit / Integration / E2E), Dữ liệu Demo & Bảo trì](#8-kiểm-thử-3-cấp-độ-unit--integration--e2e-dữ-liệu-demo--bảo-trì)
 
 ---
 
@@ -23,17 +23,17 @@
 Hệ thống giúp doanh nghiệp bên mua số hóa và tự động hóa toàn bộ quy trình kiểm tra chứng từ đầu vào và thanh toán B2B:
 
 - **Nhà cung cấp & Ánh xạ SKU (`nha_cung_cap`, `anh_xa_sku`):** Quản lý danh mục nhà cung cấp (tên, mã số thuế) và bảng quy đổi mã hàng nhà cung cấp sang mã SKU nội bộ.
-- **Đơn đặt hàng (Purchase Order — `PO`):** Lập và theo dõi PO hàng hóa (`HANG_HOA`) hoặc dịch vụ (`DICH_VU`), đơn giá cam kết và tiền đặt cọc.
-- **Phiếu nhập kho (Goods Receipt Note — `GRN`):** Ghi nhận nhập kho theo nhiều đợt gắn với PO, theo dõi số lượng thực nhận, số đạt chất lượng (`so_dat`) và số từ chối.
+- **Đơn đặt hàng (Purchase Order — `PO`):** Lập và theo dõi PO hàng hóa (`HANG_HOA`) hoặc dịch vụ (`DICH_VU`) qua popup chuyên biệt, tách rõ từng loại sản phẩm, số lượng đặt, đơn giá cam kết và tiền đặt cọc.
+- **Phiếu nhập kho (Goods Receipt Note — `GRN`):** Nhập thủ công hoặc tải lên chứng từ kho theo từng đợt gắn với PO; tách rõ các loại sản phẩm đã nhập, số lượng từng loại (thực nhận, đạt chất lượng, từ chối), đơn vị nhập kho và tổng giá trị đạt.
 - **Hóa đơn điện tử B2B (`Invoice`):** Nhập liệu thủ công hoặc tải lên PDF/Ảnh (PDF điện tử, PDF scan, JPG, PNG); tự động bóc tách dữ liệu qua pipeline **`pdfplumber` + `pypdfium2` + `RapidOCR` / `Tesseract (vie)` + Multi-VLM (Google Gemini / tùy chọn Qwen VLM)** kèm bộ nhớ đệm (cache) và hậu kiểm số học.
 - **Hồ sơ pháp lý Doanh nghiệp (`/company`):** Quản lý thông tin pháp lý công ty bên mua chuẩn Luật Doanh nghiệp 2020 & Nghị định 123/2020/NĐ-CP (bảng `thong_tin_cong_ty`, mặc định `CÔNG TY CỔ PHẦN BÁNH VIỆT NAM`, MST `0108666888`), làm chuẩn đối chiếu trên hóa đơn và phiếu kho.
 - **Đối soát 3 chiều tự động (6 bước `a` → `f`):**
   - **Bước `(a)`:** Kiểm tra Nhà cung cấp trên Hóa đơn khớp với Nhà cung cấp của PO.
   - **Bước `(b)`:** Kiểm tra mọi dòng hàng trên Hóa đơn đều ánh xạ được SKU sang dòng PO tương ứng.
   - **Bước `(c)`:** Đối chiếu Số lượng (không dung sai; PO hàng hóa so với tổng số đạt lũy kế trên GRN; tự động phân loại `PARTIAL` nếu hàng chưa giao đủ nhưng hóa đơn hợp lệ).
-  - **Bước `(d)`:** Đối chiếu Đơn giá trong ngưỡng dung sai phần trăm cấu hình (`dung_sai_don_gia_pct`).
-  - **Bước `(e)`:** Đối chiếu công thức Tổng tiền trước VAT, thuế VAT, Tiền cọc trừ và Tổng thanh toán.
-  - **Bước `(f)`:** Đối chiếu chặt **Tên công ty & MST bên mua** trên Hóa đơn (bắt buộc) và Phiếu nhập kho liên kết PO với Hồ sơ **Thông tin công ty**.
+  - **Bước `(d)`:** Đối chiếu Đơn giá trong ngưỡng dung sai phần trăm cấu hình (`dung_sai_don_gia_pct`, hiển thị rõ mức trần cho phép).
+  - **Bước `(e)`:** Đối chiếu công thức Tổng tiền trước VAT, thuế VAT, Tiền cọc trừ và Tổng thanh toán (định dạng tiền tệ VND).
+  - **Bước `(f)`:** Đối chiếu chặt **Tên & MST Đơn vị mua** trên Hóa đơn (bắt buộc) và Phiếu nhập kho liên kết PO với Hồ sơ **Thông tin công ty**.
 - **Tranh chấp & Phê duyệt ngoại lệ:** Mở và theo dõi hồ sơ tranh chấp (`OPEN` → `IN_PROGRESS` → `RESOLVED`), gửi yêu cầu và phê duyệt/từ chối ngoại lệ theo hạn mức (`QUAN_LY` / `TOAN_QUYEN`).
 - **Báo cáo & Audit Trail bất biến:** Thống kê Dashboard, xuất báo cáo `.csv` / `.xlsx` (`openpyxl`), và lưu vết kiểm toán tự động ở tầng CSDL qua các Trigger PL/pgSQL.
 
@@ -78,20 +78,6 @@ flowchart LR
     INFRA -. "API tùy chọn" .-> VLM["Gemini API / Qwen VLM"]
 ```
 
-### Phân vai chi tiết giữa 3 tầng
-
-1. **Tầng Client — Presentation Tier (`src/`):**
-   - Tổ chức theo kiến trúc **Feature-Based Architecture** (`src/features/{dashboard,invoices,purchase-orders,goods-receipts,matching,exceptions,suppliers,reports,company,users}`).
-   - Tự quản lý routing SPA bằng `react-router-dom` v7, lưu phiên đăng nhập JWT, kiểm tra quyền truy cập route theo vai trò ở `src/constants/permissions.js`, và hiển thị dữ liệu từ API.
-2. **Tầng Server — Application & Business Tier (`backend/app/`):**
-   - Tổ chức theo **Layered Architecture (4 lớp)**:
-     - `api/`: Tiếp nhận HTTP request, validate input, xác thực JWT và kiểm tra vai trò qua `Depends(can_vai_tro(...))`.
-     - `domain/`: Chứa logic nghiệp vụ thuần túy (`doi_soat` trong `matching.py`, `doi_chieu_cong_ty` trong `company.py`), không phụ thuộc trực tiếp vào kết nối DB để dễ unit test.
-     - `infrastructure/`: Tương tác hệ thống ngoài và xử lý file (`pdf_parser.py`, `vlm_extractor.py`, `export.py`, `init_db.py`, `seed.py`).
-     - `core/`: Quản lý `SQLAlchemy Engine`, giải mã JWT, truyền `app.user_id` vào PostgreSQL transaction để Trigger ghi nhận người thao tác, và chuẩn hóa lỗi CSDL (`loi_db`).
-3. **Tầng Database — Data Tier (`backend/schema.sql`):**
-   - Lưu trữ bền vững trên **PostgreSQL 16** với **17 bảng**, kiểu `JSONB` lưu chi tiết các bước đối soát, cùng các **PL/pgSQL Triggers** tự động kiểm tra ràng buộc số lượng kho, cập nhật trạng thái PO, khóa sửa hóa đơn sau xác nhận, bảo vệ nhật ký và ghi `audit_log`.
-
 ### Đối chiếu tương quan với mô hình MVC truyền thống
 
 | Thành phần trong MVC | Tương đương trong hệ thống hiện tại | Vị trí trong mã nguồn |
@@ -99,11 +85,6 @@ flowchart LR
 | **View** | Giao diện **Client React SPA** (render phía trình duyệt bằng JavaScript) | `src/features/**/pages/`, `src/components/`, `src/layouts/` |
 | **Controller** | Các **FastAPI Routers** (nhận request HTTP, kiểm tra RBAC, điều phối gọi Domain/DB) | `backend/app/api/*.py`, `backend/app/core/common.py` |
 | **Model** | **Domain Logic thuần** + **Schema & Triggers PostgreSQL** | `backend/app/domain/*.py`, `backend/schema.sql` |
-
-**Lý do chọn Client–Server (SPA + REST API) thay vì MVC render phía server:**
-- Tách bạch hoàn toàn giao diện và nghiệp vụ: Backend dễ mở rộng cho các client khác (web, mobile, tích hợp ERP) mà không phải viết lại logic.
-- Hàm đối soát ở lớp `domain/` tách rời tầng HTTP và DB giúp kiểm thử tự động nhanh và tin cậy.
-- Chống nghẽn tài nguyên khi xử lý tác vụ nặng (render PDF, chạy OCR/VLM đa luồng, xuất Excel) mà giao diện vẫn phản hồi mượt.
 
 ---
 
@@ -120,88 +101,77 @@ flowchart LR
 | **AI VLM (Tùy chọn)** | **Google GenAI SDK (`google-genai`)**, **Qwen VLM** | `google-genai>=3.2.0`; Gemini / DashScope / OpenRouter / Ollama | Trích xuất cấu trúc hóa đơn/phiếu kho từ ảnh có bố cục phức tạp kèm hậu kiểm số học |
 | **Báo cáo & Upload** | **openpyxl**, **python-multipart** | — | Xuất báo cáo Excel (`.xlsx`), CSV UTF-8 BOM và nhận upload file `multipart/form-data` |
 | **Bảo mật** | **PyJWT**, **bcrypt** | JWT `HS256` (hạn 8 giờ), Bcrypt + Salt | Băm mật khẩu an toàn, xác thực stateless JWT và phân quyền RBAC 6 vai trò |
-| **Kiểm thử & Hạ tầng** | **pytest**, **Docker**, **Docker Compose** | — | Chạy unit tests nghiệp vụ/OCR và đóng gói đồng bộ môi trường DB + API |
+| **Kiểm thử & Hạ tầng** | **pytest**, **httpx**, **Playwright**, **Docker Compose** | `@playwright/test ^1.65.1` | Kiểm thử tự động 3 cấp độ (Unit / API Integration / Browser E2E) và đóng gói DB + API |
 
 ---
 
-## 4. Cấu trúc thư mục dự án
+## 4. Cấu trúc thư mục dự án chuẩn Công nghệ Phần mềm
 
 ```text
 Digital-Invoice-Management/
-├── docker-compose.yml              # Khởi chạy PostgreSQL 16 (db) + FastAPI (api)
-├── .env.example                    # Biến môi trường mẫu (Frontend + Gemini/Qwen VLM)
-├── package.json                    # Cấu hình React 19 + Vite 6 + React Router 7
-├── vite.config.js
-├── docs/
-│   └── api-test-flow.md            # Kịch bản kiểm thử luồng API & nghiệp vụ
-├── backend/
-│   ├── Dockerfile                  # Image Python 3.12 + Tesseract Tiếng Việt + pip deps
-│   ├── requirements.txt            # Danh sách thư viện Python Backend
-│   ├── .env.example                # Biến môi trường mẫu khi chạy Backend local
-│   ├── schema.sql                  # 17 bảng PostgreSQL, khóa ngoại, triggers & audit log
-│   ├── uploads/                    # Lưu file chứng từ PDF/ảnh upload (gitignored)
-│   ├── tests/
-│   │   ├── test_matching.py        # Test lõi đối soát 3 chiều
-│   │   ├── test_company_matching.py# Test đối chiếu tên & MST công ty
-│   │   ├── test_pdf_parser.py      # Test parser PDF/OCR & tách trường
-│   │   └── test_vlm_extractor.py   # Test trích xuất Multi-VLM & hậu kiểm
-│   └── app/
-│       ├── main.py                 # Khởi tạo FastAPI app, CORS, auto-migration cột/bảng
-│       ├── core/
-│       │   └── common.py           # Engine SQLAlchemy, JWT auth, RBAC, audit app.user_id
-│       ├── api/                    # Lớp Controller / REST Endpoints (/api/*)
-│       │   ├── auth.py             # Đăng nhập & cấp JWT
-│       │   ├── documents.py        # NCC, Ánh xạ SKU, PO, Phiếu kho, Hóa đơn
-│       │   ├── upload.py           # Upload & OCR/VLM PDF/Ảnh cho Invoice, GRN, PO
-│       │   ├── matching.py         # Đối soát đơn lẻ/hàng loạt, xác nhận, duyệt ngoại lệ
-│       │   ├── disputes.py         # Tranh chấp & thông báo
-│       │   ├── reports.py          # Dashboard, xuất CSV & Excel (.xlsx)
-│       │   └── admin.py            # Người dùng, cấu hình dung sai, Thông tin công ty, Audit log
-│       ├── domain/                 # Lớp nghiệp vụ thuần (Pure Domain Logic)
-│       │   ├── matching.py         # Lõi đối soát 6 bước (a → f)
-│       │   └── company.py          # Chuẩn hóa & đối chiếu pháp lý công ty bên mua
-│       └── infrastructure/         # Lớp hạ tầng
-│           ├── pdf_parser.py       # Pipeline pdfplumber + RapidOCR/Tesseract + tách bảng
-│           ├── vlm_extractor.py    # Điều phối Gemini/Qwen VLM + cache + hậu kiểm số học
-│           ├── export.py           # Xuất báo cáo CSV / Excel
-│           ├── init_db.py          # Nạp backend/schema.sql khi chạy ngoài Docker
-│           └── seed.py             # Tạo dữ liệu mẫu & 6 tài khoản kiểm thử
-└── src/
-    ├── main.jsx & App.jsx          # Entry point React SPA
-    ├── index.css                   # Design system B2B (góc vuông đồng bộ, responsive)
-    ├── constants/permissions.js    # Bảng phân quyền route theo vai trò
-    ├── contexts/AuthContext.jsx    # Quản lý trạng thái đăng nhập & JWT
-    ├── routes/AppRoutes.jsx        # Bảo vệ route theo RBAC
-    ├── layouts/MainLayout.jsx      # Khung Sidebar + Topbar + vùng nội dung chính
-    ├── components/                 # Sidebar, Topbar, Modal upload, CurrencyInput, Logo
-    ├── services/api.js             # HTTP client gọi API Backend
-    ├── utils/                      # Định dạng tiền/ngày, audit format, validation
-    └── features/                   # Các module giao diện theo nghiệp vụ
-        ├── dashboard/
-        ├── purchase-orders/
-        ├── goods-receipts/
-        ├── invoices/
-        ├── matching/
-        ├── exceptions/
-        ├── suppliers/
-        ├── reports/
-        ├── company/                # Trang Hồ sơ Thông tin công ty (/company)
-        └── users/                  # Đăng nhập, Quản trị người dùng, Cấu hình, Audit Log
+├── README.md                               # Tài liệu tổng quan, kiến trúc & hướng dẫn vận hành
+├── docker-compose.yml                      # Đóng gói PostgreSQL 16 (db) + FastAPI (api)
+├── .env.example                            # Mẫu biến môi trường (Frontend + Gemini/Qwen VLM)
+├── package.json & vite.config.js           # Cấu hình Frontend React 19 + Vite 6 + Playwright
+├── playwright.config.js                    # Cấu hình kiểm thử tự động E2E trên trình duyệt
+├── docs/                                   # Tài liệu kỹ thuật & kịch bản trình diễn
+│   ├── 01-api-test-flow.md                 # Luồng kiểm thử RESTful API cơ bản
+│   └── 02-demo-scenarios.md                # Kịch bản thuyết trình 6 tình huống đối chứng Đúng/Sai
+├── backend/                                # Phân hệ Server (Layered Architecture)
+│   ├── Dockerfile & requirements.txt       # Môi trường Python 3.12 + Tesseract Tiếng Việt
+│   ├── .env.example                        # Mẫu biến môi trường khi chạy Backend local
+│   ├── schema.sql                          # 17 bảng PostgreSQL, khóa ngoại, 8 Triggers & Audit Log
+│   ├── uploads/                            # Thư mục lưu file chứng từ upload (gitignored)
+│   ├── app/
+│   │   ├── main.py                         # Khởi tạo FastAPI, CORS, auto-migration
+│   │   ├── core/common.py                  # SQLAlchemy Engine, JWT, RBAC, session app.user_id
+│   │   ├── api/                            # Lớp Controller / REST Endpoints (auth, documents, upload, matching, disputes, reports, admin)
+│   │   ├── domain/                         # Lớp Nghiệp vụ thuần (matching.py, company.py)
+│   │   └── infrastructure/                 # Lớp Hạ tầng (pdf_parser.py, vlm_extractor.py, export.py, init_db.py, seed.py)
+│   └── tests/                              # Kiểm thử Cấp độ 1 (Unit) & Cấp độ 2 (Integration) theo thứ tự
+│       ├── test_01_matching_domain.py      # Unit test thuật toán đối soát 3 chiều
+│       ├── test_02_company_matching.py     # Unit test chuẩn hóa & đối chiếu pháp lý công ty
+│       ├── test_03_pdf_parser.py           # Unit test parser PDF/OCR
+│       ├── test_04_vlm_extractor.py        # Unit test điều phối Multi-VLM & hậu kiểm số học
+│       ├── test_05_bva_and_pdf_samples.py  # Kiểm thử giá trị biên (BVA) & bóc tách 24 mẫu PDF
+│       └── test_06_api_integration.py      # Integration test TC01..TC14 (API + RBAC + Triggers DB)
+├── src/                                    # Phân hệ Client React SPA (Feature-Based Architecture)
+│   ├── main.jsx, App.jsx, index.css        # Entry point & Design system góc vuông B2B
+│   ├── constants/permissions.js            # Ma trận phân quyền route theo vai trò
+│   ├── contexts/AuthContext.jsx            # Quản lý phiên đăng nhập JWT
+│   ├── routes/AppRoutes.jsx                # Bảo vệ route theo RBAC
+│   ├── layouts/MainLayout.jsx              # Bố cục Sidebar + Topbar
+│   ├── components/                         # Sidebar, Topbar, Modal, CurrencyInput, Logo
+│   ├── services/api.js                     # HTTP client kết nối REST API
+│   ├── utils/                              # format.js, auditFormat.js, validation.js
+│   └── features/                           # 10 phân hệ giao diện (dashboard, purchase-orders, goods-receipts, invoices, matching, exceptions, suppliers, reports, company, users)
+├── e2e/                                    # Kiểm thử Cấp độ 3 (End-to-End Browser Automation)
+│   └── reconciliation-workflow.spec.js     # Kịch bản Playwright kiểm thử liên hoàn 4 vai trò
+└── qa/                                     # Bộ dữ liệu kiểm thử chuẩn hóa, ảnh minh chứng & script QA
+    ├── pdf-samples/                        # 24 file PDF mẫu chuẩn kế toán (NĐ 123 & TT 200)
+    │   ├── 01-grn-valid/                   # 3 mẫu Phiếu nhập kho hợp lệ
+    │   ├── 02-grn-invalid/                 # 4 mẫu Phiếu nhập kho sai nghiệp vụ / bị Trigger chặn
+    │   ├── 03-invoice-valid/               # 5 mẫu Hóa đơn GTGT hợp lệ (khớp, dung sai, partial, dịch vụ, viết tắt)
+    │   └── 04-invoice-invalid/             # 12 mẫu Hóa đơn sai nghiệp vụ & lỗi kỹ thuật (corrupt, fake PDF, blank scan)
+    ├── screenshots/                        # 14 ảnh chụp minh chứng kết quả chạy E2E (00 -> 13)
+    └── scripts/                            # Công cụ phục vụ kiểm thử & trình diễn
+        ├── seed_demo_data.py               # Nạp bộ dữ liệu demo PO-2026-101..105
+        ├── generate_demo_pdfs.mjs          # Sinh bộ PDF chứng từ mẫu
+        ├── generate_malformed_pdfs.py      # Sinh bộ PDF lỗi kỹ thuật
+        └── build_qa_report_xlsx.py         # Xuất bảng báo cáo Test Case & RTM ra Excel
 ```
 
 ---
 
 ## 5. Phân quyền (RBAC) & Tài khoản kiểm thử
 
-Hệ thống áp dụng kiểm tra phân quyền **2 lớp** (ẩn/chặn route ở Frontend trong `src/constants/permissions.js` và kiểm tra vai trò qua `can_vai_tro` ở từng API Backend).
-
-Sau khi chạy lệnh `seed`, hệ thống tạo sẵn **6 tài khoản mẫu** dùng chung mật khẩu **`Matkhau@123`**:
+Hệ thống áp dụng kiểm tra phân quyền **2 lớp** (`src/constants/permissions.js` ở Frontend và `can_vai_tro` ở từng API Backend). Mật khẩu chung cho toàn bộ tài khoản mẫu: **`Matkhau@123`**
 
 | Tên đăng nhập | Vai trò (`vai_tro`) | Route mặc định | Phạm vi truy cập & Nghiệp vụ chính |
 | :--- | :--- | :--- | :--- |
 | **`tester`** | `TOAN_QUYEN` | `/dashboard` | **Toàn quyền kiểm thử:** truy cập mọi trang, thực hiện toàn bộ luồng từ tạo PO → GRN → Hóa đơn → Đối soát → Duyệt ngoại lệ → Quản trị. |
 | `muahang` | `MUA_HANG` | `/purchase-orders` | Quản lý Nhà cung cấp & ánh xạ SKU, tạo/xem Đơn đặt hàng (PO), xem Phiếu nhập kho, xem Thông tin công ty. |
-| `thukho` | `THU_KHO` | `/goods-receipts` | Lập và xem Phiếu nhập kho (GRN), xem Đơn đặt hàng (PO) tham chiếu, xem Thông tin công ty. |
+| `thukho` | `THU_KHO` | `/goods-receipts` | Lập/tải lên và xem Phiếu nhập kho (GRN), xem Đơn đặt hàng (PO) tham chiếu, xem Thông tin công ty. |
 | `ketoan` | `KE_TOAN_AP` | `/dashboard` | Nhập/Upload Hóa đơn, chạy Đối soát 3 chiều, mở & xử lý Tranh chấp, gửi yêu cầu duyệt ngoại lệ, xem Báo cáo, xem Thông tin công ty. |
 | `quanly` | `QUAN_LY` | `/dashboard` | Xem Dashboard, chứng từ, đối soát, Báo cáo, xem Thông tin công ty; **Phê duyệt / Từ chối** các yêu cầu ngoại lệ. |
 | `admin` | `QUAN_TRI` | `/dashboard` | Quản lý Người dùng, cấu hình dung sai/ngưỡng lệch, tra cứu Audit Log, xem Báo cáo/NCC và **chỉnh sửa Thông tin công ty** (`/company`). |
@@ -212,91 +182,48 @@ Sau khi chạy lệnh `seed`, hệ thống tạo sẵn **6 tài khoản mẫu** 
 
 ### Yêu cầu môi trường
 
-- **Docker** và **Docker Compose** (khuyến nghị để chạy PostgreSQL + FastAPI API).
+- **Docker** và **Docker Compose** (khuyến nghị để chạy PostgreSQL 16 + FastAPI API).
 - **Node.js 18+** và **npm** (để chạy giao diện Vite + React).
-- *(Tùy chọn, nếu chạy Backend trực tiếp không qua Docker)*: Python 3.11+, PostgreSQL 16, gói `tesseract-ocr` và `tesseract-ocr-vie`.
 
-### Bước 1: Clone dự án & Tạo file cấu hình `.env`
+### Bước 1: Clone dự án & Cấu hình biến môi trường `.env`
 
 ```bash
-git clone https://github.com/PhanTay2006/Digital-Invoice-Management.git
+git clone -b final https://github.com/PhanTay2006/Digital-Invoice-Management.git
 cd Digital-Invoice-Management
 cp .env.example .env
 ```
 
-Các biến cấu hình chính trong `.env`:
+> **Cách bật Gemini API (tùy chọn):**  
+> - Lấy API key miễn phí tại https://aistudio.google.com/apikey và điền vào `GEMINI_API_KEY=AIza...` trong file `.env`.  
+> - Nếu đổi `.env` khi Docker đang chạy, hãy chạy **`docker compose up -d`** (không chỉ `restart`) để container nhận biến môi trường mới.  
+> - Nếu để trống `GEMINI_API_KEY`, hệ thống vẫn trích xuất PDF/Ảnh bình thường bằng OCR offline (`pdfplumber` + `RapidOCR` + `Tesseract`).
 
-| Biến môi trường | Mặc định | Mô tả |
-| :--- | :--- | :--- |
-| `VITE_API_BASE_URL` | `http://localhost:8000/api` | URL gốc để Frontend gọi Backend API |
-| `GEMINI_API_KEY` | *(trống)* | **Tùy chọn.** Nếu có API key Gemini sẽ bật trích xuất AI VLM cho hóa đơn/phiếu kho dạng ảnh hoặc scan phức tạp. Nếu để trống, hệ thống vẫn chạy OCR offline bình thường bằng `pdfplumber` + `RapidOCR` / `Tesseract`. |
-| `GEMINI_VLM_MODELS` | `gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-4-hydrogen` | Danh sách model Gemini thử tuần tự khi trích xuất |
-| `VLM_PROVIDER` | `auto` | Chế độ chọn VLM (`auto` / `gemini` / `qwen`) |
-| `VLM_ENSEMBLE` | `false` | Bật/tắt đối chiếu chéo nhiều mô hình VLM |
-| `QWEN_API_BASE`, `QWEN_API_KEY`, `QWEN_VLM_MODEL`, `OLLAMA_BASE_URL` | *(trống)* | Cấu hình tùy chọn cho Qwen VLM (DashScope, OpenRouter hoặc Ollama local) |
-
----
-
-### Cách 1 (Khuyến nghị): Chạy Database & Backend bằng Docker + Frontend bằng Vite
-
-**1. Khởi động PostgreSQL 16 và Backend FastAPI:**
+### Bước 2: Khởi động PostgreSQL 16 & Backend FastAPI (Docker)
 
 ```bash
 docker compose up -d --build
 ```
 
-> Lưu ý: Trên Linux, nếu user hiện tại chưa được thêm vào nhóm `docker`, hãy thêm `sudo` trước các lệnh `docker compose`.
+> Trên Linux, thêm `sudo` trước `docker compose` nếu tài khoản chưa thuộc nhóm `docker`. Đảm bảo cổng `5432` và `8000` không bị chiếm bởi dịch vụ khác trên máy.
 
-Lệnh này tự động:
-- Khởi tạo container `doisoat_db` (`PostgreSQL 16`, DB `doisoat`, user `app`, pass `app`, port `5432`) và nạp toàn bộ cấu trúc 17 bảng cùng Triggers từ `backend/schema.sql`.
-- Build image Python 3.12 kèm Tesseract Tiếng Việt và khởi chạy container `doisoat_api` (`Uvicorn` hot-reload tại port `8000`).
-
-**2. Nạp dữ liệu mẫu ban đầu (tạo 6 tài khoản & bộ chứng từ mẫu `PO-2026-001`, `GRN-001`, `HD-0457`):**
+### Bước 3: Nạp dữ liệu mẫu
 
 ```bash
+# Cách A: Nạp bộ dữ liệu cơ bản (PO-2026-001, GRN-001, HD-0457 + 6 tài khoản)
 docker compose exec api python -m app.infrastructure.seed
+
+# Cách B (Khuyến nghị khi Demo): Nạp đầy đủ bộ PO-2026-101..105 khớp với 24 file PDF trong qa/pdf-samples/
+docker compose exec api python /srv/qa/scripts/seed_demo_data.py --reset --fix-seed-buyer
 ```
 
-Kết quả mong đợi trên terminal:
-`Xong. Đăng nhập: tester (toàn quyền) hoặc admin|muahang|thukho|ketoan|quanly, mật khẩu Matkhau@123`
-
-**3. Cài đặt thư viện & Khởi chạy Giao diện Frontend:**
+### Bước 4: Cài đặt thư viện & Khởi chạy Frontend
 
 ```bash
 npm install
 npm run dev
 ```
 
----
-
-### Cách 2: Chạy thủ công không dùng Docker (Local Python + PostgreSQL)
-
-1. Tạo database PostgreSQL tên `doisoat` (user `app`, mật khẩu `app`).
-2. Tạo file cấu hình backend từ mẫu và chỉnh sửa `DATABASE_URL` nếu cần:
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-3. Cài đặt thư viện Python và nạp schema / dữ liệu mẫu (khuyến nghị dùng virtualenv; nếu chạy OCR Tesseract trên Ubuntu/Debian cần cài thêm `sudo apt install tesseract-ocr tesseract-ocr-vie`):
-   ```bash
-   cd backend
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-
-   export DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/doisoat"
-   export JWT_SECRET="chuoi-bi-mat-bat-ky"
-
-   python -m app.infrastructure.init_db
-   python -m app.infrastructure.seed
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-4. Ở một terminal khác tại thư mục gốc dự án, cài đặt và chạy Frontend:
-   ```bash
-   npm install
-   npm run dev
-   ```
-
----
+> **Lưu ý CORS:** Truy cập đúng địa chỉ **`http://localhost:5173`** (Backend cấu hình CORS cho origin `http://localhost:5173`; tránh mở qua `127.0.0.1:5173` hoặc cổng khác).
 
 ### Các địa chỉ truy cập sau khi khởi chạy
 
@@ -311,13 +238,13 @@ npm run dev
 
 ## 7. Tổng quan RESTful API chính
 
-Tất cả endpoint được gắn tiền tố `/api` (chi tiết kịch bản test xem thêm tại [docs/api-test-flow.md](docs/api-test-flow.md)):
+Tất cả endpoint nằm dưới tiền tố `/api` (xem thêm tại [docs/01-api-test-flow.md](docs/01-api-test-flow.md) và [docs/02-demo-scenarios.md](docs/02-demo-scenarios.md)):
 
 | Nhóm chức năng | Endpoint tiêu biểu | Vai trò chính được phép |
 | :--- | :--- | :--- |
 | **Xác thực** | `POST /api/dang-nhap` | Công khai (cấp JWT Bearer) |
 | **Nhà cung cấp & SKU** | `GET/POST /api/nha-cung-cap`, `GET/POST /api/anh-xa-sku` | `MUA_HANG`, `KE_TOAN_AP`, `QUAN_LY`, `QUAN_TRI`, `TOAN_QUYEN` |
-| **Đơn đặt hàng (PO)** | `GET/POST /api/po`, `GET /api/po/{pid}`, `POST /api/po/upload` | Tạo/Upload: `MUA_HANG`; Xem: `MUA_HANG`, `THU_KHO`, `KE_TOAN_AP`, `QUAN_LY` |
+| **Đơn đặt hàng (PO)** | `GET/POST /api/po`, `GET /api/po/{pid}` | Tạo: `MUA_HANG`; Xem: `MUA_HANG`, `THU_KHO`, `KE_TOAN_AP`, `QUAN_LY` |
 | **Phiếu nhập kho (GRN)** | `GET/POST /api/phieu-kho`, `GET /api/phieu-kho/{kid}`, `POST /api/phieu-kho/upload` | Lập/Upload: `THU_KHO`; Xem: `MUA_HANG`, `THU_KHO`, `KE_TOAN_AP`, `QUAN_LY` |
 | **Hóa đơn & Tệp đính kèm** | `GET/POST /api/hoa-don`, `GET /api/hoa-don/{hid}`, `POST /api/hoa-don/upload`, `GET /api/hoa-don/{hid}/file` | Tạo/Upload: `KE_TOAN_AP`; Xem/tải file: `KE_TOAN_AP`, `QUAN_LY`, `QUAN_TRI` (`+ TOAN_QUYEN`) |
 | **Đối soát 3 chiều** | `POST /api/hoa-don/{hid}/doi-soat`, `POST /api/hoa-don/doi-soat-hang-loat`, `POST /api/hoa-don/{hid}/xac-nhan` | Chạy đối soát & xác nhận: `KE_TOAN_AP` (`+ TOAN_QUYEN`) |
@@ -327,51 +254,36 @@ Tất cả endpoint được gắn tiền tố `/api` (chi tiết kịch bản t
 
 ---
 
-## 8. Kiểm thử, Kiểm tra CSDL & Bảo trì
+## 8. Kiểm thử 3 cấp độ (Unit / Integration / E2E), Dữ liệu Demo & Bảo trì
 
-### Chạy kiểm thử tự động (Tests & Build)
+### Chạy kiểm thử tự động
 
 ```bash
-# Chạy toàn bộ unit tests Backend (4 suite: matching, company_matching, pdf_parser, vlm_extractor)
-docker compose exec api pytest
+# Cấp độ 1 — Unit Tests & Kiểm thử 24 mẫu PDF (test_01 -> test_05)
+docker compose exec api pytest /srv/tests/test_01_matching_domain.py /srv/tests/test_02_company_matching.py /srv/tests/test_03_pdf_parser.py /srv/tests/test_04_vlm_extractor.py /srv/tests/test_05_bva_and_pdf_samples.py
 
-# Hoặc chạy local khi đã cài virtualenv ở máy:
-pytest backend/tests
+# Cấp độ 2 — API & Database Trigger Integration Tests (test_06)
+docker compose exec api pytest /srv/tests/test_06_api_integration.py
+
+# Cấp độ 3 — End-to-End Browser Tests với Playwright
+npm run test:e2e
 
 # Kiểm tra build production của Frontend
 npm run build
 ```
 
-### Kiểm tra nhanh dữ liệu trong PostgreSQL
+### Các lệnh bảo trì Docker & PostgreSQL thường dùng
 
 ```bash
-# Xem danh sách Đơn đặt hàng (PO)
-docker compose exec db psql -U app -d doisoat -c "SELECT id, so_po, loai_po, tong_tien, trang_thai FROM don_hang_po;"
+# Cập nhật lại container khi thay đổi file .env hoặc docker-compose.yml
+docker compose up -d
 
-# Xem danh sách Hóa đơn B2B
-docker compose exec db psql -U app -d doisoat -c "SELECT id, so_hoa_don, ten_nguoi_mua, mst_nguoi_mua, tong_thanh_toan, trang_thai FROM hoa_don;"
-
-# Xem Thông tin pháp lý công ty đang cấu hình
-docker compose exec db psql -U app -d doisoat -c "SELECT id, ten_cong_ty, mst, ma_cqt_quan_ly FROM thong_tin_cong_ty;"
-
-# Xem 10 dòng nhật ký kiểm toán gần nhất do Trigger ghi lại
-docker compose exec db psql -U app -d doisoat -c "SELECT id, thoi_gian, hanh_dong, doi_tuong, doi_tuong_id FROM audit_log ORDER BY id DESC LIMIT 10;"
-```
-
-### Các lệnh vận hành & bảo trì thường dùng
-
-```bash
-# Khởi động lại Backend API sau khi sửa code hoặc cập nhật .env
-docker compose restart api
-
-# Tạm dừng hệ thống (giữ nguyên dữ liệu trong volume pgdata)
+# Tạm dừng / Bật lại hệ thống (giữ nguyên dữ liệu)
 docker compose stop
-
-# Bật lại hệ thống sau khi tạm dừng (kèm chạy lại npm run dev cho Frontend)
 docker compose start
 
-# Xóa toàn bộ dữ liệu DB để khởi tạo sạch lại từ đầu và nạp lại dữ liệu mẫu
+# Xóa toàn bộ volume dữ liệu để khởi tạo lại từ đầu
 docker compose down -v
 docker compose up -d --build
-docker compose exec api python -m app.infrastructure.seed
+docker compose exec api python /srv/qa/scripts/seed_demo_data.py --reset --fix-seed-buyer
 ```

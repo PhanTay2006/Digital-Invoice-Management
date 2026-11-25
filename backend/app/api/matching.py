@@ -32,12 +32,26 @@ class BatchDoiSoatIn(BaseModel):
 def chay_doi_soat(hid: int, u=Depends(can_vai_tro("KE_TOAN_AP"))):
     with engine.begin() as c:  # một giao dịch: INSERT lan_doi_soat + UPDATE trạng thái
         phien(c, u["id"])
-        hd = c.execute(text("SELECT * FROM hoa_don WHERE id=:i FOR UPDATE"), {"i": hid}).mappings().first()
-        if not hd:
+        hd_row = c.execute(text("""
+            SELECT h.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+            FROM hoa_don h
+            LEFT JOIN nha_cung_cap n ON n.id = h.nha_cung_cap_id
+            WHERE h.id=:i FOR UPDATE OF h
+        """), {"i": hid}).mappings().first()
+        if not hd_row:
             raise HTTPException(404, "Không có hóa đơn")
+        hd = dict(hd_row)
         if hd["trang_thai"] == "RECONCILED":
             raise HTTPException(409, "Hóa đơn đã Reconciled, bị khóa")
-        po = c.execute(text("SELECT * FROM don_hang_po WHERE id=:i"), {"i": hd["po_id"]}).mappings().first()
+        po_row = c.execute(text("""
+            SELECT p.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+            FROM don_hang_po p
+            LEFT JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            WHERE p.id=:i
+        """), {"i": hd["po_id"]}).mappings().first()
+        po = dict(po_row) if po_row else None
+        if not po:
+            raise HTTPException(404, "Không tìm thấy PO tham chiếu")
         dhd = [dict(r) for r in c.execute(text("SELECT * FROM dong_hoa_don WHERE hoa_don_id=:i"), {"i": hid}).mappings()]
         dpo = {r["id"]: dict(r) for r in c.execute(text("SELECT * FROM dong_po WHERE po_id=:i"), {"i": po["id"]}).mappings()}
         kho = {r[0]: r[1] for r in c.execute(text(
@@ -90,12 +104,24 @@ def chay_doi_soat_hang_loat(b: Optional[BatchDoiSoatIn] = Body(default=None), u=
         if b and b.hoa_don_ids:
             ids = sorted({int(x) for x in b.hoa_don_ids})
             hds = [dict(r) for r in c.execute(
-                text("SELECT * FROM hoa_don WHERE id = ANY(:ids) AND trang_thai <> 'RECONCILED' ORDER BY id FOR UPDATE"),
+                text("""
+                    SELECT h.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+                    FROM hoa_don h
+                    LEFT JOIN nha_cung_cap n ON n.id = h.nha_cung_cap_id
+                    WHERE h.id = ANY(:ids) AND h.trang_thai <> 'RECONCILED'
+                    ORDER BY h.id FOR UPDATE OF h
+                """),
                 {"ids": ids},
             ).mappings()]
         else:
             hds = [dict(r) for r in c.execute(
-                text("SELECT * FROM hoa_don WHERE trang_thai = 'CHUA_DOI_SOAT' ORDER BY id FOR UPDATE")
+                text("""
+                    SELECT h.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+                    FROM hoa_don h
+                    LEFT JOIN nha_cung_cap n ON n.id = h.nha_cung_cap_id
+                    WHERE h.trang_thai = 'CHUA_DOI_SOAT'
+                    ORDER BY h.id FOR UPDATE OF h
+                """)
             ).mappings()]
 
         if not hds:
@@ -106,7 +132,12 @@ def chay_doi_soat_hang_loat(b: Optional[BatchDoiSoatIn] = Body(default=None), u=
 
         pos_map = {
             r["id"]: dict(r)
-            for r in c.execute(text("SELECT * FROM don_hang_po WHERE id = ANY(:pids)"), {"pids": po_ids}).mappings()
+            for r in c.execute(text("""
+                SELECT p.*, n.ten AS ten_ncc, n.mst AS mst_ncc
+                FROM don_hang_po p
+                LEFT JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+                WHERE p.id = ANY(:pids)
+            """), {"pids": po_ids}).mappings()
         } if po_ids else {}
 
         dhd_by_hd: dict[int, list[dict]] = {}

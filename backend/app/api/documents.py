@@ -174,10 +174,28 @@ def ds_po(u=Depends(can_vai_tro("MUA_HANG", "THU_KHO", "KE_TOAN_AP", "QUAN_LY"))
     with engine.connect() as c:
         rows = c.execute(text("""
             SELECT p.*, n.ten AS ten_ncc, n.mst AS mst_ncc,
-                   (SELECT STRING_AGG(COALESCE(NULLIF(dp.mo_ta, ''), dp.ma_sku), ', ' ORDER BY dp.id)
-                    FROM dong_po dp WHERE dp.po_id = p.id) AS mat_hang
+                   COALESCE(agg.mat_hang, '') AS mat_hang,
+                   COALESCE(agg.so_mat_hang, 0) AS so_mat_hang,
+                   COALESCE(agg.tong_so_luong_dat, 0) AS tong_so_luong_dat,
+                   COALESCE(agg.dong_tom_tat, '[]'::json) AS dong_tom_tat
             FROM don_hang_po p
             JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            LEFT JOIN (
+                SELECT dp.po_id,
+                       COUNT(dp.id) AS so_mat_hang,
+                       SUM(dp.so_luong_dat) AS tong_so_luong_dat,
+                       STRING_AGG(COALESCE(NULLIF(dp.mo_ta, ''), dp.ma_sku), ', ' ORDER BY dp.id) AS mat_hang,
+                       JSON_AGG(
+                           JSON_BUILD_OBJECT(
+                               'ma_sku', dp.ma_sku,
+                               'ten_san_pham', COALESCE(NULLIF(dp.mo_ta, ''), dp.ma_sku),
+                               'so_luong_dat', dp.so_luong_dat,
+                               'don_gia', dp.don_gia
+                           ) ORDER BY dp.id
+                       ) AS dong_tom_tat
+                FROM dong_po dp
+                GROUP BY dp.po_id
+            ) agg ON agg.po_id = p.id
             ORDER BY p.ngay_dat DESC, p.id DESC
         """)).mappings()
         return [dict(r) for r in rows]
@@ -289,14 +307,47 @@ class KhoIn(BaseModel):
 def ds_phieu_kho(u=Depends(can_vai_tro("MUA_HANG", "THU_KHO", "KE_TOAN_AP", "QUAN_LY"))):
     with engine.connect() as c:
         rows = c.execute(text("""
-            SELECT k.*, p.so_po, n.ten AS ten_ncc,
-                   (SELECT STRING_AGG(COALESCE(NULLIF(dp.mo_ta, ''), dp.ma_sku), ', ' ORDER BY dk.id)
-                    FROM dong_phieu_kho dk
-                    JOIN dong_po dp ON dp.id = dk.dong_po_id
-                    WHERE dk.phieu_kho_id = k.id) AS mat_hang
+            SELECT k.*, p.so_po, n.ten AS ten_ncc, n.mst AS mst_ncc,
+                   COALESCE(agg.mat_hang, '') AS mat_hang,
+                   COALESCE(agg.so_mat_hang, 0) AS so_mat_hang,
+                   COALESCE(agg.tong_so_luong_dat_po, 0) AS tong_so_luong_dat_po,
+                   COALESCE(agg.tong_so_nhan, 0) AS tong_so_nhan,
+                   COALESCE(agg.tong_so_dat, 0) AS tong_so_dat,
+                   COALESCE(agg.tong_so_tu_choi, 0) AS tong_so_tu_choi,
+                   COALESCE(agg.tong_gia_tri_nhan, 0) AS tong_gia_tri_nhan,
+                   COALESCE(agg.tong_gia_tri, 0) AS tong_gia_tri,
+                   COALESCE(agg.dong_tom_tat, '[]'::json) AS dong_tom_tat
             FROM phieu_kho k
             JOIN don_hang_po p ON p.id = k.po_id
             JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
+            LEFT JOIN (
+                SELECT dk.phieu_kho_id,
+                       COUNT(dk.id) AS so_mat_hang,
+                       SUM(dp.so_luong_dat) AS tong_so_luong_dat_po,
+                       SUM(dk.so_nhan) AS tong_so_nhan,
+                       SUM(dk.so_dat) AS tong_so_dat,
+                       SUM(dk.so_tu_choi) AS tong_so_tu_choi,
+                       SUM(dk.so_nhan * dp.don_gia) AS tong_gia_tri_nhan,
+                       SUM(dk.so_dat * dp.don_gia) AS tong_gia_tri,
+                       STRING_AGG(
+                           COALESCE(NULLIF(dp.mo_ta, ''), dp.ma_sku),
+                           ', ' ORDER BY dk.id
+                       ) AS mat_hang,
+                       JSON_AGG(
+                           JSON_BUILD_OBJECT(
+                               'ma_sku', dp.ma_sku,
+                               'ten_san_pham', COALESCE(NULLIF(dp.mo_ta, ''), dp.ma_sku),
+                               'so_luong_dat', dp.so_luong_dat,
+                               'so_nhan', dk.so_nhan,
+                               'so_dat', dk.so_dat,
+                               'so_tu_choi', dk.so_tu_choi,
+                               'don_gia', dp.don_gia
+                           ) ORDER BY dk.id
+                       ) AS dong_tom_tat
+                FROM dong_phieu_kho dk
+                JOIN dong_po dp ON dp.id = dk.dong_po_id
+                GROUP BY dk.phieu_kho_id
+            ) agg ON agg.phieu_kho_id = k.id
             ORDER BY k.ngay_nhap DESC, k.id DESC
         """)).mappings()
         return [dict(r) for r in rows]
@@ -306,7 +357,8 @@ def ds_phieu_kho(u=Depends(can_vai_tro("MUA_HANG", "THU_KHO", "KE_TOAN_AP", "QUA
 def xem_phieu_kho(kid: int, u=Depends(can_vai_tro("MUA_HANG", "THU_KHO", "KE_TOAN_AP", "QUAN_LY"))):
     with engine.connect() as c:
         k = c.execute(text("""
-            SELECT k.*, p.so_po, n.ten AS ten_ncc
+            SELECT k.*, p.so_po, p.tong_tien AS tong_tien_po, p.ngay_dat AS ngay_dat_po,
+                   n.ten AS ten_ncc, n.mst AS mst_ncc
             FROM phieu_kho k
             JOIN don_hang_po p ON p.id = k.po_id
             JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id
@@ -315,12 +367,29 @@ def xem_phieu_kho(kid: int, u=Depends(can_vai_tro("MUA_HANG", "THU_KHO", "KE_TOA
         if not k:
             raise HTTPException(404, "Không có phiếu kho")
         dong = [dict(r) for r in c.execute(text("""
-            SELECT dk.*, dp.ma_sku, COALESCE(NULLIF(dp.mo_ta, ''), 'Sản phẩm ' || dp.ma_sku) AS ten_san_pham, dp.so_luong_dat
+            SELECT dk.*, dp.ma_sku,
+                   COALESCE(NULLIF(dp.mo_ta, ''), 'Sản phẩm ' || dp.ma_sku) AS ten_san_pham,
+                   dp.so_luong_dat,
+                   dp.don_gia,
+                   (dk.so_nhan * dp.don_gia) AS thanh_tien_nhan,
+                   (dk.so_dat * dp.don_gia) AS thanh_tien
             FROM dong_phieu_kho dk
             JOIN dong_po dp ON dp.id = dk.dong_po_id
             WHERE dk.phieu_kho_id=:i ORDER BY dk.id
         """), {"i": kid}).mappings()]
-    return {**k, "dong": dong}
+    tong_so_nhan = sum((D(str(d["so_nhan"])) for d in dong), D(0))
+    tong_so_dat = sum((D(str(d["so_dat"])) for d in dong), D(0))
+    tong_so_tu_choi = sum((D(str(d["so_tu_choi"])) for d in dong), D(0))
+    tong_gia_tri = sum((D(str(d["thanh_tien"])) for d in dong), D(0))
+    return {
+        **k,
+        "so_mat_hang": len(dong),
+        "tong_so_nhan": tong_so_nhan,
+        "tong_so_dat": tong_so_dat,
+        "tong_so_tu_choi": tong_so_tu_choi,
+        "tong_gia_tri": tong_gia_tri,
+        "dong": dong,
+    }
 
 
 @router.post("/phieu-kho", status_code=201)

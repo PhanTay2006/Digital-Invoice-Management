@@ -274,9 +274,19 @@ function getLocalDb() {
         po_id: 1,
         so_po: 'PO-2026-001',
         ten_ncc: 'Công ty ABC',
+        mst_ncc: '0312345678',
+        ten_don_vi: DEFAULT_COMPANY_INFO.ten_cong_ty,
+        mst_don_vi: DEFAULT_COMPANY_INFO.mst,
         ngay_nhap: '2026-10-05',
         trang_thai: 'CONFIRMED',
-        dong: [{ id: 1, phieu_kho_id: 1, dong_po_id: 1, ma_sku: 'SKU-01', ten_san_pham: 'Thiết bị 5G tiêu chuẩn', so_nhan: 100, so_dat: 100, so_tu_choi: 0, ly_do: null }],
+        mat_hang: 'Thiết bị 5G tiêu chuẩn',
+        so_mat_hang: 1,
+        tong_so_luong_dat_po: 100,
+        tong_so_nhan: 100,
+        tong_so_dat: 100,
+        tong_so_tu_choi: 0,
+        tong_gia_tri: 100000000,
+        dong: [{ id: 1, phieu_kho_id: 1, dong_po_id: 1, ma_sku: 'SKU-01', ten_san_pham: 'Thiết bị 5G tiêu chuẩn', so_luong_dat: 100, don_gia: 1000000, so_nhan: 100, so_dat: 100, so_tu_choi: 0, thanh_tien: 100000000, ly_do: null }],
       },
     ],
     hoa_don: [
@@ -290,6 +300,8 @@ function getLocalDb() {
         vat: 10500000,
         tien_coc_tru: 0,
         tong_thanh_toan: 115500000,
+        ten_nguoi_mua: DEFAULT_COMPANY_INFO.ten_cong_ty,
+        mst_nguoi_mua: DEFAULT_COMPANY_INFO.mst,
         trang_thai: 'CHUA_DOI_SOAT',
         theo_ngoai_le: false,
         dong: [{ id: 1, hoa_don_id: 1, dong_po_id: 1, ma_sku_ncc: 'ABC-01', ten_san_pham: 'Thiết bị 5G tiêu chuẩn', so_luong: 100, don_gia: 1050000, thanh_tien: 105000000 }],
@@ -413,20 +425,51 @@ function handleLocalFallback(path, options = {}) {
   }
 
   if (path === '/phieu-kho' && method === 'GET') return db.phieu_kho
+  if (path.match(/^\/phieu-kho\/\d+$/) && method === 'GET') {
+    const kid = Number(path.split('/').pop())
+    return db.phieu_kho.find((k) => k.id === kid) || db.phieu_kho[0]
+  }
   if (path === '/phieu-kho' && method === 'POST') {
     const id = db.phieu_kho.length + 1
     const po = db.po.find((p) => p.id === Number(body.po_id))
+    const poLineMap = Object.fromEntries((po?.dong || []).map((d) => [Number(d.id), d]))
+    const dong = (body.dong || []).map((d, idx) => {
+      const dp = poLineMap[Number(d.dong_po_id)] || {}
+      const don_gia = Number(dp.don_gia || 0)
+      const so_dat = Number(d.so_dat || 0)
+      return {
+        id: id * 100 + idx + 1,
+        phieu_kho_id: id,
+        dong_po_id: d.dong_po_id,
+        ma_sku: dp.ma_sku || `SKU-${idx + 1}`,
+        ten_san_pham: dp.mo_ta || `Sản phẩm ${dp.ma_sku || idx + 1}`,
+        so_luong_dat: Number(dp.so_luong_dat || 0),
+        don_gia,
+        so_nhan: Number(d.so_nhan || 0),
+        so_dat,
+        so_tu_choi: Number(d.so_tu_choi || 0),
+        thanh_tien: so_dat * don_gia,
+        ly_do: d.ly_do || null,
+      }
+    })
     const newGrn = {
       id,
       so_phieu: body.so_phieu,
       po_id: Number(body.po_id),
       so_po: po?.so_po || `PO-${body.po_id}`,
       ten_ncc: po?.ten_ncc || 'Công ty ABC',
+      mst_ncc: po?.mst_ncc || '0312345678',
       ten_don_vi: body.ten_don_vi || null,
       mst_don_vi: body.mst_don_vi || null,
       ngay_nhap: body.ngay_nhap,
       trang_thai: 'CONFIRMED',
-      dong: body.dong,
+      mat_hang: dong.map((x) => x.ten_san_pham).join(', '),
+      so_mat_hang: dong.length,
+      tong_so_nhan: dong.reduce((s, x) => s + x.so_nhan, 0),
+      tong_so_dat: dong.reduce((s, x) => s + x.so_dat, 0),
+      tong_so_tu_choi: dong.reduce((s, x) => s + x.so_tu_choi, 0),
+      tong_gia_tri: dong.reduce((s, x) => s + x.thanh_tien, 0),
+      dong,
     }
     if (po) po.trang_thai = 'CLOSED'
     db.phieu_kho.unshift(newGrn)
